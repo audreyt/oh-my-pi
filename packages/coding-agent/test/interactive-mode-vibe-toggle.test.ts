@@ -2,8 +2,8 @@
  * Contracts: /vibe mode toggle on InteractiveMode.
  *
  * 1. Vibe tools do not exist in the session registry before the mode is entered.
- * 2. Entering registers and activates exactly `read`, parent-owned `todo`, plus
- *    the vibe tools.
+ * 2. Entering registers and activates exactly `read`, UI-only `ask`,
+ *    parent-owned `todo`, plus the vibe tools.
  * 3. Exiting unregisters the vibe tools and restores the pre-vibe active toolset
  *    exactly, including the legitimate empty set.
  */
@@ -163,7 +163,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 		// in-memory auth storage has no anthropic key, so stub it.
 		vi.spyOn(modelRegistry, "getApiKey").mockResolvedValue("test-key");
 
-		const registryTools = [stubTool("read"), stubTool("todo")];
+		const registryTools = [stubTool("read"), stubTool("ask"), stubTool("todo")];
 		storage = new ExitFaultStorage();
 		session = new AgentSession({
 			agent: new Agent({
@@ -202,27 +202,37 @@ describe("InteractiveMode vibe mode toggle", () => {
 		tempDir.removeSync();
 	});
 
-	it("preserves the parent Todo tool and restores the exact pre-vibe toolset on exit", async () => {
-		expect(session.getAllToolNames().toSorted()).toEqual(["read", "todo"]);
+	it("preserves the parent Ask and Todo tools and restores the exact pre-vibe toolset on exit", async () => {
+		expect(session.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
 		expect(session.getActiveToolNames()).toEqual([]);
 
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(true);
 		const inMode = session.getActiveToolNames();
 		expect(inMode).toContain("read");
+		expect(inMode).toContain("ask");
 		expect(inMode).toContain("todo");
 		for (const name of VIBE_TOOL_NAMES) {
 			expect(inMode).toContain(name);
 		}
-		expect(inMode.toSorted()).toEqual(["read", "todo", ...VIBE_TOOL_NAMES].toSorted());
-		expect(session.getAllToolNames().toSorted()).toEqual(["read", "todo", ...VIBE_TOOL_NAMES].toSorted());
+		expect(inMode.toSorted()).toEqual(["ask", "read", "todo", ...VIBE_TOOL_NAMES].toSorted());
+		expect(session.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo", ...VIBE_TOOL_NAMES].toSorted());
+
+		const sendCustomMessage = vi.spyOn(session, "sendCustomMessage");
+		await session.sendVibeModeContext({ deliverAs: "steer" });
+		const message = normalizeCustomMessagePayload(sendCustomMessage.mock.calls[0]?.[0]);
+		const content = typeof message.content === "string" ? message.content : "";
+		expect(message.customType).toBe("vibe-mode-context");
+		expect(content).toContain("`todo`");
+		expect(content).toContain("`ask`");
+		expect(content).toContain("ask the USER for a decision");
 
 		// Toggle off: the empty previous toolset must come back — only the
 		// ephemeral vibe tools must leave the registry.
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(false);
 		expect(session.getActiveToolNames()).toEqual([]);
-		expect(session.getAllToolNames().toSorted()).toEqual(["read", "todo"]);
+		expect(session.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
 	});
 
 	it("removes the Vibe directive from provider context on exit", async () => {
@@ -440,7 +450,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 		).toHaveLength(2);
 	});
 
-	it("keeps a same-named non-built-in Todo tool unavailable in Vibe mode", async () => {
+	it("keeps same-named non-built-in Ask and Todo tools unavailable in Vibe mode", async () => {
 		const model = session.model;
 		if (!model) throw new Error("Expected active model");
 		const foreignTodoSession = new AgentSession({
@@ -455,7 +465,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 			sessionManager: SessionManager.create(tempDir.path(), tempDir.path()),
 			settings: Settings.isolated({}),
 			modelRegistry,
-			toolRegistry: new Map(["read", "todo"].map(name => [name, stubTool(name)])),
+			toolRegistry: new Map(["read", "ask", "todo"].map(name => [name, stubTool(name)])),
 			builtInToolNames: ["read"],
 			createVibeTools: () => VIBE_TOOL_NAMES.map(stubTool),
 		});
@@ -473,16 +483,24 @@ describe("InteractiveMode vibe mode toggle", () => {
 			await foreignTodoMode.handleVibeModeCommand();
 			expect(foreignTodoSession.getActiveToolNames().toSorted()).toEqual(["read", ...VIBE_TOOL_NAMES].toSorted());
 
+			const sendCustomMessage = vi.spyOn(foreignTodoSession, "sendCustomMessage");
+			await foreignTodoSession.sendVibeModeContext({ deliverAs: "steer" });
+			const message = normalizeCustomMessagePayload(sendCustomMessage.mock.calls[0]?.[0]);
+			const content = typeof message.content === "string" ? message.content : "";
+			expect(content).not.toContain("`todo`");
+			expect(content).not.toContain("`ask`");
+			expect(content).not.toContain("ask the USER for a decision");
+			expect(content).not.toContain("parent session list");
 			await foreignTodoMode.handleVibeModeCommand();
 			expect(foreignTodoSession.getActiveToolNames()).toEqual([]);
-			expect(foreignTodoSession.getAllToolNames().toSorted()).toEqual(["read", "todo"]);
+			expect(foreignTodoSession.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
 		} finally {
 			foreignTodoMode.stop();
 			await foreignTodoSession.dispose();
 		}
 	});
 
-	it("preserves workers, Todo access, and mode metadata on a same-session reload", async () => {
+	it("preserves workers, Ask/Todo access, and mode metadata on a same-session reload", async () => {
 		await mode.init({ suppressWelcomeIntro: true });
 		await mode.handleVibeModeCommand();
 		await session.sessionManager.ensureOnDisk();
@@ -501,7 +519,15 @@ describe("InteractiveMode vibe mode toggle", () => {
 		expect(await switching).toBe(true);
 
 		expect(mode.vibeModeEnabled).toBe(true);
-		expect(session.getActiveToolNames()).toEqual(expect.arrayContaining(["read", "todo", ...VIBE_TOOL_NAMES]));
+		expect(session.getActiveToolNames()).toEqual(expect.arrayContaining(["read", "ask", "todo", ...VIBE_TOOL_NAMES]));
+		const sendCustomMessage = vi.spyOn(session, "sendCustomMessage");
+		await session.sendVibeModeContext({ deliverAs: "steer" });
+		const message = normalizeCustomMessagePayload(sendCustomMessage.mock.calls[0]?.[0]);
+		const content = typeof message.content === "string" ? message.content : "";
+		expect(content).toContain("`todo`");
+		expect(content).toContain("`ask`");
+		expect(content).toContain("ask the USER for a decision");
+		expect(content).toContain("parent session list");
 		expect(suspend).toHaveBeenCalledTimes(1);
 		expect(terminate).not.toHaveBeenCalled();
 		expect(vibeModeEntryCount(session.sessionManager)).toBe(1);
@@ -703,7 +729,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 	it("does not clobber the target's active tools with the source snapshot when switching out of vibe", async () => {
 		await mode.init({ suppressWelcomeIntro: true });
 		// Pre-vibe snapshot on the source session is empty; entering vibe activates
-		// read, parent-owned todo, and the vibe tools.
+		// read, UI-only ask, parent-owned todo, and the vibe tools.
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(true);
 		expect(session.getActiveToolNames()).toContain("read");
@@ -719,10 +745,10 @@ describe("InteractiveMode vibe mode toggle", () => {
 		expect(await session.switchSession(targetFile)).toBe(true);
 
 		expect(mode.vibeModeEnabled).toBe(false);
-		// The transient vibe tools are gone, but the genuinely-active `read` and
-		// parent-owned `todo` tools must survive — the source's empty pre-vibe
-		// snapshot must not wipe them.
-		expect(session.getActiveToolNames()).toEqual(["read", "todo"]);
+		// The transient vibe tools are gone, but the genuinely-active `read`,
+		// UI-only `ask`, and parent-owned `todo` tools must survive — the source's
+		// empty pre-vibe snapshot must not wipe them.
+		expect(session.getActiveToolNames()).toEqual(["read", "todo", "ask"]);
 		for (const name of VIBE_TOOL_NAMES) {
 			expect(session.getActiveToolNames()).not.toContain(name);
 		}
