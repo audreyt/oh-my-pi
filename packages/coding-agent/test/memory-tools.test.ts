@@ -287,6 +287,7 @@ describe("Mnemopi tool factories", () => {
 		expect(MemoryRecallTool.createIf(session)).toBeInstanceOf(MemoryRecallTool);
 		expect(MemoryReflectTool.createIf(session)).toBeNull();
 		expect(MemoryForgetTool.createIf(session)?.approval).toBe("write");
+		expect(MemoryLinkTool.createIf(session)?.approval).toBe("write");
 	});
 });
 
