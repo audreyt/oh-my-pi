@@ -211,7 +211,8 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Git",
 	],
 	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
-	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
+	memory: ["General", "Auto-Learn", "Mnemopi", "Mnemon", "Hindsight"],
+
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
 	shell: ["Bash", "Eval & Runtimes"],
 	tools: [
