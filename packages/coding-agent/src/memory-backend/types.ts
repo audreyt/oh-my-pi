@@ -64,7 +64,6 @@ export interface MemoryBackendSaveInput {
 	entities?: string;
 }
 
-
 export interface MemoryBackendSaveResult {
 	backend: MemoryBackendId;
 	stored: number;
@@ -130,8 +129,6 @@ export interface MemoryBackendForgetResult {
 	id?: string;
 	message?: string;
 }
-
-
 
 export interface MemoryBackendOperationContext {
 	agentDir: string;
@@ -214,8 +211,6 @@ export interface MemoryBackend {
 
 	/** Soft-delete one insight. Mnemon-only. */
 	forget?(context: MemoryBackendOperationContext, id: string): Promise<MemoryBackendForgetResult>;
-
-
 
 	/** Render backend-specific memory statistics as markdown (`/memory stats`). */
 	stats?(agentDir: string, cwd: string, session?: AgentSession): Promise<string | undefined>;

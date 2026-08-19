@@ -3208,7 +3208,6 @@ export const SETTINGS_SCHEMA = {
 	"sharpshooter.intervalMinutes": { type: "number", default: 5 },
 	"sharpshooter.injectionTokenLimit": { type: "number", default: 15000 },
 
-
 	// Auto-Learn (experimental): post-stop nudge to capture lessons to memory
 	// and mint/enhance isolated managed skills under ~/.omp/agent/managed-skills.
 	// Master flag is default-off → zero footprint; sub-flags gate behaviour.
@@ -3506,7 +3505,6 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 	"mnemon.recallLimit": { type: "number", default: 3 },
-
 
 	// Hindsight (https://hindsight.vectorize.io)
 	"hindsight.apiUrl": {
