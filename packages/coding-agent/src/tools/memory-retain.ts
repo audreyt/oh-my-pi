@@ -21,7 +21,6 @@ const memoryRetainSchema = type({
 		.describe("memories to retain"),
 });
 
-
 export type MemoryRetainParams = typeof memoryRetainSchema.infer;
 export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema, MemoryRetainDetails> {
 	readonly name = "retain";
@@ -70,18 +69,16 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema, Me
 				stored += result.stored;
 				const id = result.ids?.[0];
 				if (id) ids.push(id);
-				const candidateLines = (result.candidates ?? [])
-					.slice(0, 6)
-					.map(candidate => {
-						const score =
-							candidate.score === undefined
-								? ""
-								: candidate.kind === "semantic"
-									? ` sim=${candidate.score.toFixed(2)}`
-									: ` hop=${candidate.score}`;
-						const preview = candidate.content ? ` ${candidate.content}` : "";
-						return `  - ${candidate.kind}${score} ${candidate.id}${preview}`;
-					});
+				const candidateLines = (result.candidates ?? []).slice(0, 6).map(candidate => {
+					const score =
+						candidate.score === undefined
+							? ""
+							: candidate.kind === "semantic"
+								? ` sim=${candidate.score.toFixed(2)}`
+								: ` hop=${candidate.score}`;
+					const preview = candidate.content ? ` ${candidate.content}` : "";
+					return `  - ${candidate.kind}${score} ${candidate.id}${preview}`;
+				});
 				lines.push(
 					id
 						? `${result.message ?? "added"} ${id}${candidateLines.length > 0 ? `\nCandidates (link if a real relationship exists):\n${candidateLines.join("\n")}` : ""}`

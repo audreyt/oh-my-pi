@@ -12,7 +12,6 @@ const memoryRecallSchema = type({
 	"limit?": type("number").describe("max results; mnemon only, default 10"),
 });
 
-
 export type MemoryRecallParams = typeof memoryRecallSchema.infer;
 
 export class MemoryRecallTool implements AgentTool<typeof memoryRecallSchema> {
@@ -46,7 +45,6 @@ export class MemoryRecallTool implements AgentTool<typeof memoryRecallSchema> {
 					},
 					params.query,
 					{ signal, limit: params.limit },
-
 				);
 				if (!result || result.count === 0) {
 					return {
