@@ -11,6 +11,7 @@ import type { MemoryBackend } from "./types";
  *   - `memory.backend === "hindsight"`  → Hindsight remote memory
  *   - `memory.backend === "mnemopi"`  → local Mnemopi SQLite memory
  *   - `memory.backend === "sharpshooter"` → friction-gated project decision memory
+ *   - `memory.backend === "mnemon"`     → native Mnemon CLI + ~/.mnemon
  *   - `memory.backend === "local"`      → local rollout summary pipeline
  *   - everything else                   → no-op
  *
@@ -22,6 +23,7 @@ export async function resolveMemoryBackend(settings: Settings): Promise<MemoryBa
 	if (id === "hindsight") return (await import("../hindsight/backend")).hindsightBackend;
 	if (id === "mnemopi") return (await import("../mnemopi/backend")).mnemopiBackend;
 	if (id === "sharpshooter") return (await import("../sharpshooter/backend")).sharpshooterBackend;
+	if (id === "mnemon") return (await import("../mnemon/backend")).mnemonBackend;
 	if (id === "local") return localBackend;
 	return offBackend;
 }

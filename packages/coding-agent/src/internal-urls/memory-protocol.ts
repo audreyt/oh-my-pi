@@ -441,6 +441,12 @@ export class MemoryProtocolHandler implements ProtocolHandler {
 			if (hindsightActive) {
 				throw new Error(HINDSIGHT_UNADDRESSABLE);
 			}
+			if (backend === "mnemon") {
+				throw new Error(
+					"Native Mnemon memories are not addressable via memory://. Use `recall` for ids, then `mnemon related` / `mnemon forget` on the CLI. `read memory://<id>` is only available with memory.backend=mnemopi.",
+				);
+			}
+
 			if (mnemopiStates.length === 0) {
 				throw unknownNamespaceError(namespace);
 			}

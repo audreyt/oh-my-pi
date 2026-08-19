@@ -3159,18 +3159,19 @@ export const SETTINGS_SCHEMA = {
 	"memories.summaryInjectionTokenLimit": { type: "number", default: 5000 },
 
 	// Memory backend selector — picks between local memories pipeline,
-	// Mnemopi local SQLite, Hindsight remote memory, Sharpshooter project
-	// decisions, or off. The legacy
+	// Mnemopi local SQLite, native Mnemon CLI, Hindsight remote memory,
+	// Sharpshooter project decisions, or off. The legacy
 	// `memories.enabled` flag is migration input only; see config/settings.ts.
 	"memory.backend": {
 		type: "enum",
-		values: ["off", "local", "hindsight", "mnemopi", "sharpshooter"] as const,
+		values: ["off", "local", "hindsight", "mnemopi", "sharpshooter", "mnemon"] as const,
 		default: "off",
 		ui: {
 			tab: "memory",
 			group: "General",
 			label: "Memory Backend",
-			description: "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
+			description:
+				"Off, local summary pipeline, Mnemopi SQLite, native Mnemon CLI, Hindsight remote memory, or Sharpshooter",
 			options: [
 				{ value: "off", label: "Off", description: "No memory subsystem runs" },
 				{ value: "local", label: "Local", description: "Local rollout summarisation pipeline (memory_summary.md)" },
@@ -3185,6 +3186,11 @@ export const SETTINGS_SCHEMA = {
 					label: "Sharpshooter",
 					description:
 						"Friction-gated project decision files (architecture/product/style), consolidated in the background",
+				},
+				{
+					value: "mnemon",
+					label: "Mnemon",
+					description: "Native Mnemon CLI against ~/.mnemon (typed graph, no auto-retain drain)",
 				},
 			],
 		},
@@ -3201,6 +3207,7 @@ export const SETTINGS_SCHEMA = {
 	},
 	"sharpshooter.intervalMinutes": { type: "number", default: 5 },
 	"sharpshooter.injectionTokenLimit": { type: "number", default: 15000 },
+
 
 	// Auto-Learn (experimental): post-stop nudge to capture lessons to memory
 	// and mint/enhance isolated managed skills under ~/.omp/agent/managed-skills.
@@ -3473,6 +3480,33 @@ export const SETTINGS_SCHEMA = {
 	"mnemopi.recallMaxQueryChars": { type: "number", default: 4000 },
 	"mnemopi.injectionTokenLimit": { type: "number", default: 5000 },
 	"mnemopi.debug": { type: "boolean", default: false },
+
+	// Native Mnemon CLI backend. Talks to the existing ~/.mnemon store.
+	// Never point mnemopi.dbPath at that database — schemas differ.
+	"mnemon.cliPath": {
+		type: "string",
+		default: undefined,
+		ui: {
+			tab: "memory",
+			group: "Mnemon",
+			label: "Mnemon CLI Path",
+			description: "Optional absolute path to mnemon. Defaults to PATH, then ~/.local/bin, then Homebrew.",
+			condition: "mnemonActive",
+		},
+	},
+	"mnemon.autoRecall": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "memory",
+			group: "Mnemon",
+			label: "Mnemon Auto Recall",
+			description: "Inject high-score native recall into the first turn of each session",
+			condition: "mnemonActive",
+		},
+	},
+	"mnemon.recallLimit": { type: "number", default: 3 },
+
 
 	// Hindsight (https://hindsight.vectorize.io)
 	"hindsight.apiUrl": {
