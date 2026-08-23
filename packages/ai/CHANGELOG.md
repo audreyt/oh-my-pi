@@ -2,6 +2,53 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Broker-backed startup no longer blocks on a broker round trip when the encrypted snapshot cache is fresh: the credential store starts from the cached snapshot and the background snapshot stream revalidates immediately (stale-while-revalidate). First launches and expired caches still fail fast with the actionable broker error.
+
+### Fixed
+
+- Captured bounded Devin Connect trailer details and request-shape evidence for diagnosing intermittent `invalid_argument` stream rejections ([#4218](https://github.com/can1357/oh-my-pi/issues/4218)).
+- Fixed abandoned `auth-broker-snapshot.enc.*.tmp` files accumulating in the cache directory when a process exited mid-write; stale temp files are now swept on each cache write.
+- Fixed Cursor GPT effort models failing with `not_found` on accounts that require the discovered effort-specific model id ([#9287](https://github.com/can1357/oh-my-pi/issues/9287)).
+- Fixed thinking-loop detection going silent after the first streamed tool call, so Grok/xAI reasoning loops that continue after a tool call starts still abort and retry instead of spinning until you press Esc.
+- Fixed Codex continuations, retries, and compaction replacing or dropping the turn-scoped sticky-routing token ([#9277](https://github.com/can1357/oh-my-pi/issues/9277)).
+- Fixed Codex Responses append chains falling back to full-context replay when replay-sanitized assistant items differ only by output-only IDs or lifecycle status.
+- Fixed Cursor usage reporting “no usage data” for plans without a numeric legacy request cap.
+- Fixed DeepSeek models rejecting requests with HTTP 400 `unknown variant \`image_url\`, expected \`text\`` when screenshots or image-producing tool results are present in conversation history or when `model.input` claims vision capability; `convertMessages` in `openai-completions` now strips `image_url` content parts and injects non-vision image placeholders for all DeepSeek endpoints.
+- Fixed `PI_PROXY` covering only provider streams: OAuth token refresh and login, usage probes, and model discovery went out through the bare global `fetch` and ignored it, so a region-blocked token endpoint answered `403 Request not allowed` (Anthropic `/v1/oauth/token`) and disabled the credential while the proxied stream itself worked. `installGlobalProxyFetch()` now routes the process-wide `fetch` through `PI_PROXY`; a per-request proxy such as `PI_PROXY_<PROVIDER>` still wins, and loopback / private-range / `NO_PROXY` targets stay direct.
+- Fixed Anthropic inference ignoring every proxy setting. `coworkFetch` runs on `node:https`, whose Bun shim discards both `agent.createConnection` and `options.createConnection`: the CONNECT tunnel to `PI_PROXY` was built, TLS-negotiated, then abandoned, and the request dialed `api.anthropic.com` on the default route (measured at the proxy: 581 bytes of handshake, zero request bytes). On a region-blocked egress that returned `403 {"type":"forbidden","message":"Request not allowed"}` with the proxy apparently configured. Proxied requests now go through Bun's own `fetch`, which honors `init.proxy`, trading the Cowork TLS/header profile for a proxy that actually carries the traffic; the dead tunnel plumbing is gone from the transport. `node:http2` (Cursor) does honor `createConnection` and is unaffected.
+- Fixed `cowork-fetch` capturing `globalThis.fetch` at module load, so a proxy wrapper installed later in startup was ignored on its fallback path.
+- Cursor Connect end-stream failures now surface bounded server trailer details instead of opaque generic errors ([#9137](https://github.com/can1357/oh-my-pi/pull/9137) by [@Mustaqeem66](https://github.com/Mustaqeem66))
+- Fixed Cursor sessions aborting on the next turn or during compaction after MCP tools returned numeric-looking string arguments ([#9394](https://github.com/can1357/oh-my-pi/issues/9394)).
+- Fixed glyph tokenization crashing with `entries is not a function` when `Context.systemPrompt` arrived as a bare string (e.g. from legacy earendil-works extensions); it is now normalized to an array before iterating, matching every provider path ([#9384](https://github.com/can1357/oh-my-pi/issues/9384)).
+
+## [18.0.0] - 2026-08-22
+
+### Added
+
+- Added reversible private-use glyph tokenization for Claude-compatible provider requests, including prompt notices, streamed response decoding, and safe handling of unresolved model-authored glyph tokens.
+
+## [17.4.3] - 2026-08-21
+
+### Fixed
+
+- Fixed completed Anthropic turns remaining busy when the provider sent `message_stop` but kept the SSE connection open, which stranded tool execution and queued steering until timeout.
+
+## [17.4.2] - 2026-08-21
+
+### Added
+
+- Image content blocks accept an optional `url` mirror: providers whose APIs fetch remote images (Anthropic url sources, OpenAI/xAI Responses and Chat Completions `image_url`, Google `fileData`) send the URL instead of the inline base64 payload.
+
+### Fixed
+
+- Fixed Cursor thinking-effort selection being cosmetic: collapsed effort-routed families (GPT-5.6 Luna/Sol/Terra, Grok 4.5/4.6) now send the effort-routed wire model id instead of always pinning the `-none` off tier ([#9246](https://github.com/can1357/oh-my-pi/issues/9246)).
+- Fixed OAuth preflight refresh stranding a peer-rotated credential: when a concurrent process rotated a rotating-refresh-token grant (e.g. Anthropic) during preflight, the resolve pass skipped the freshly reloaded row and failed the request with no credentials for single-account setups ([#9194](https://github.com/can1357/oh-my-pi/issues/9194)).
+- Fixed Cursor reasoning-sibling models (e.g. `gpt-5.4-mini-low`, `gpt-5.6-sol-xhigh`) failing with `resource_exhausted` (errorId 528384): the per-effort GPT slug is now split into its base model id plus a `{ id: "reasoning", value: <effort> }` request parameter, matching the official `cursor-agent` wire shape, instead of sending the sibling slug as the wire model id with no parameters ([#9164](https://github.com/can1357/oh-my-pi/issues/9164)).
+
+## [17.4.1] - 2026-08-21
+
 ### Added
 
 - Added Codex Responses support for Code Mode, preserving tool modes and passing tool namespace metadata during sessions.
