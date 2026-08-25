@@ -110,8 +110,8 @@ fallback is used when that role is unset.
 | Falcon-H1-Tiny-90M | 147MB |     117 / 174ms |       17/29 | Smallest; lower fidelity on complex inputs       |
 | LFM2.5-350M        | 292MB |     166 / 266ms |        4/30 | Aggressively terse, often a one-word label       |
 
-**Shipped local options**: `lfm2.5-230m`, `lfm2.5-350m`, `falcon-h1-90m`.
-**Default setting**: `online`. The default local download for `omp tiny-models` is `lfm2.5-230m`.
+**Shipped local options**: `lfm2.5-230m`, `lfm2.5-350m`, `falcon-h1-90m`, and Darwin-only `afm-core` (Apple SystemLanguageModel; OS-owned weights, not ONNX).
+**Default setting**: `online`. The default local download for `omp tiny-models` is `lfm2.5-230m`. `omp tiny-models download afm-core` installs the bundled Apple Silicon sidecar (or compiles one when that triple is absent) and probes Apple Intelligence readiness; it does not download weights.
 
 ## Task 2: Mnemopi memory (`providers.memoryModel`)
 

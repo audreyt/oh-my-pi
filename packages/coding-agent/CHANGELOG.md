@@ -48,6 +48,15 @@
 - Added V8 `.cpuprofile` support to the read tool (Node/Bun `--cpu-prof`, Chrome DevTools, CDP `Profiler.stop` output): reads now return a compact bottleneck summary — hot-path call tree with on-CPU milliseconds (`(idle)` time excluded), collapsed pass-through chains, flattened direct recursion, shortened file URLs, and a top-functions-by-self-time table. `:raw` still reads the original JSON, and files that merely carry the extension fall back to plain text.
 - Added separate Advisor cost visibility to the status line, rendering primary and Advisor spend as `$2.67 (sub) + $0.41 (adv)` while keeping already-incurred Advisor cost across runtime disablement and same-session history rewrites.
 - Added a configurable per-request timeout for the `inspect_image` tool (`inspect_image.timeoutMs`, default 5 minutes; set to 0 to disable) so a stalled vision-model provider fails fast with a clear error instead of blocking until manual abort ([#4165](https://github.com/can1357/oh-my-pi/issues/4165)).
+- Added an explicit append-only transcript declaration and width-independent stable-row API for components that can guarantee an immutable history prefix across later updates.
+- Added `afm-core` as an opt-in Darwin session-title engine (`providers.tinyModel`). It uses the on-device Apple Foundation Model via a bundled Apple Silicon sidecar (Xcode/CLT only needed on other Darwin triples); `omp tiny-models download afm-core` probes readiness instead of fetching Hugging Face weights.
+- Added `:img` read selector to rasterize local SVG/SVGZ files for vision input.
+- Added side-by-side image and SVG previews to `omp git`, including local Git LFS object resolution and explicit placeholders for unavailable or unsupported binary content.
+- Added the `omp if-bench` command: a zero-tool instruction-following and working-memory benchmark that drives one cached conversation per model, adding one more glyph array action every turn while a `nya{1,N}` directive moves through the prompt, with a live turn-ladder board and a ranked scoreboard
+- Added `q` shortcut to exit the git TUI
+- Added a third state to the git TUI whitespace toggle (`b`): beyond ignoring whitespace-only line changes, it hides formatting-only changes (indentation, line splits/joins, blank lines) and import-only changes in TypeScript/JavaScript, Rust, and Go
+- Compressed single-child directory chains in the sidebar tree view
+- Split pure additions (new/untracked files) into their own list below tracked changes in each git TUI file section, separated by a rule; addition rows drop the redundant status letter and deleted files render struck through
 
 ### Changed
 
