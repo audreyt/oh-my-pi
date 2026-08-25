@@ -28,6 +28,7 @@ import { renderTextChatTemplate } from "./completion-prompt";
 import {
 	completeAfmCore,
 	foundationModelsUnavailableReason,
+	isAfmRequestScopedFailure,
 	probeAfmCore,
 } from "./apple-fm";
 import {
@@ -314,7 +315,16 @@ class FoundationModelsModel {
 			.filter(message => message.role === "user")
 			.map(message => message.content)
 			.join("\n");
-		return completeAfmCore({ instructions, prompt, maxTokens: request.maxNewTokens });
+		try {
+			return await completeAfmCore({ instructions, prompt, maxTokens: request.maxNewTokens });
+		} catch (error) {
+			// Guardrail and empty-text failures are request-scoped: return
+			// empty (the client normalizes it to null) without failing the
+			// worker, so later titles still try AFM. Compile and
+			// availability faults throw and fail closed.
+			if (isAfmRequestScopedFailure(error)) return "";
+			throw error;
+		}
 	}
 }
 
