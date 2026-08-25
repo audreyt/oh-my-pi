@@ -28,6 +28,7 @@ import { renderTextChatTemplate } from "./completion-prompt";
 import {
 	completeAfmCore,
 	foundationModelsUnavailableReason,
+	isAfmModelNotReady,
 	isAfmRequestScopedFailure,
 	probeAfmCore,
 } from "./apple-fm";
