@@ -7,6 +7,15 @@
 ### Added
 
 - Added `omp usage clients` to report per-client token usage recorded by the auth broker, including the machine and application responsible for usage by provider. Supports `--days` and `--json` output.
+- Added an explicit append-only transcript declaration and width-independent stable-row API for components that can guarantee an immutable history prefix across later updates.
+- Added `afm-core` as an opt-in Darwin session-title engine (`providers.tinyModel`). It uses the on-device Apple Foundation Model via a bundled Apple Silicon sidecar (Xcode/CLT only needed on other Darwin triples); `omp tiny-models download afm-core` probes readiness instead of fetching Hugging Face weights.
+- Added `:img` read selector to rasterize local SVG/SVGZ files for vision input.
+- Added side-by-side image and SVG previews to `omp git`, including local Git LFS object resolution and explicit placeholders for unavailable or unsupported binary content.
+- Added the `omp if-bench` command: a zero-tool instruction-following and working-memory benchmark that drives one cached conversation per model, adding one more glyph array action every turn while a `nya{1,N}` directive moves through the prompt, with a live turn-ladder board and a ranked scoreboard
+- Added `q` shortcut to exit the git TUI
+- Added a third state to the git TUI whitespace toggle (`b`): beyond ignoring whitespace-only line changes, it hides formatting-only changes (indentation, line splits/joins, blank lines) and import-only changes in TypeScript/JavaScript, Rust, and Go
+- Compressed single-child directory chains in the sidebar tree view
+- Split pure additions (new/untracked files) into their own list below tracked changes in each git TUI file section, separated by a rule; addition rows drop the redundant status letter and deleted files render struck through
 
 ### Changed
 
