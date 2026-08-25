@@ -314,7 +314,7 @@ class FoundationModelsModel {
 			.filter(message => message.role === "user")
 			.map(message => message.content)
 			.join("\n");
-		return completeAfmCore({ instructions, prompt });
+		return completeAfmCore({ instructions, prompt, maxTokens: request.maxNewTokens });
 	}
 }
 
