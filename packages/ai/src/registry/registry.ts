@@ -29,6 +29,7 @@ import { googleVertexProvider } from "./google-vertex";
 import { groqProvider } from "./groq";
 import { huggingfaceProvider } from "./huggingface";
 import { kagiProvider } from "./kagi";
+import { keenableProvider } from "./keenable";
 import { kiloProvider } from "./kilo";
 import { kimiCodeProvider } from "./kimi-code";
 import { litellmProvider } from "./litellm";
@@ -148,6 +149,7 @@ const ALL = [
 	yoloAutoProvider,
 	tavilyProvider,
 	kagiProvider,
+	keenableProvider,
 	exaProvider,
 	parallelProvider,
 	ollamaProvider,

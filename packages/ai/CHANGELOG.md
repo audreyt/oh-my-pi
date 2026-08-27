@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
+
 ## [18.0.7] - 2026-08-26
 
 ### Added

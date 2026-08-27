@@ -10,6 +10,7 @@
 
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
 import type { SearchProvider } from "./providers/base";
+import { KeenableProvider } from "./providers/keenable";
 import { SEARCH_PROVIDER_LABELS, SEARCH_PROVIDER_ORDER, SearchProviderError, type SearchProviderId } from "./types";
 
 export type { SearchParams } from "./providers/base";
@@ -78,6 +79,11 @@ const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 		id: "tavily",
 		label: SEARCH_PROVIDER_LABELS.tavily,
 		load: async () => new (await import("./providers/tavily")).TavilyProvider(),
+	},
+	keenable: {
+		id: "keenable",
+		label: SEARCH_PROVIDER_LABELS.keenable,
+		load: async () => new KeenableProvider(),
 	},
 	firecrawl: {
 		id: "firecrawl",
