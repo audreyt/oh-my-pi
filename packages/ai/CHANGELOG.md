@@ -342,6 +342,9 @@
 
 - Fixed Amazon Bedrock requests to OpenAI-schema models (the `gpt-5.x` SKUs) failing with HTTP 400 `unknown_parameter: 'thinking'` when reasoning was enabled, by sending `reasoning.effort` instead of Anthropic's `thinking` budget block for models the catalog marks as effort-controlled.
 - Fixed Cursor replay rejecting sessions with orphaned tool results while preserving their output as assistant context.
+### Added
+
+- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
 
 ## [18.0.7] - 2026-08-26
 
