@@ -9,6 +9,9 @@
 
 ### Added
 
+
+- Added nonblocking shared model-catalog refresh with cached startup hydration and source freshness diagnostics, allowing newly published models for known providers to appear without a binary release.
+
 - Added `omp usage clients` to report per-client token usage recorded by the auth broker, including the machine and application responsible for usage by provider. Supports `--days` and `--json` output.
 - Added an explicit append-only transcript declaration and width-independent stable-row API for components that can guarantee an immutable history prefix across later updates.
 - Added `afm-core` as an opt-in Darwin engine for session titles (`providers.tinyModel`) and unexpected-stop classification (`providers.unexpectedStopModel`). It uses the on-device Apple Foundation Model via a bundled Apple Silicon sidecar (Xcode/CLT only needed on other Darwin triples); `omp tiny-models download afm-core` probes readiness instead of fetching Hugging Face weights.
