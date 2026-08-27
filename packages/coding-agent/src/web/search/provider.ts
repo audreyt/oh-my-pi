@@ -79,6 +79,11 @@ const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 		label: SEARCH_PROVIDER_LABELS.tavily,
 		load: async () => new (await import("./providers/tavily")).TavilyProvider(),
 	},
+	keenable: {
+		id: "keenable",
+		label: SEARCH_PROVIDER_LABELS.keenable,
+		load: async () => new (await import("./providers/keenable")).KeenableProvider(),
+	},
 	firecrawl: {
 		id: "firecrawl",
 		label: SEARCH_PROVIDER_LABELS.firecrawl,

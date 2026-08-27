@@ -47,6 +47,7 @@ export function getExtraHelpText(): string {
   PERPLEXITY_API_KEY         - Perplexity web search API key (optional; anonymous fallback)
   PERPLEXITY_COOKIES         - Perplexity web search (session cookie)
   TAVILY_API_KEY             - Tavily web search
+  KEENABLE_API_KEY           - Keenable web search and fetch
   TINYFISH_API_KEY           - TinyFish web search
   FIRECRAWL_API_KEY          - Firecrawl web search
   ANTHROPIC_SEARCH_API_KEY   - Anthropic web search (override; isolates search from main ANTHROPIC_API_KEY)
