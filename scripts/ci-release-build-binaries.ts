@@ -3,6 +3,7 @@
 import * as fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import * as path from "node:path";
+import { buildAppleSpeechSidecar } from "../packages/coding-agent/scripts/apple-speech-sidecar";
 import { COMPILED_EXTERNAL_DEPENDENCIES, compileCodingAgent } from "../packages/coding-agent/scripts/compile-binary";
 
 interface BinaryTarget {
@@ -138,12 +139,22 @@ async function buildBinary(target: BinaryTarget): Promise<void> {
 		);
 		return;
 	}
+	let appleSpeechSidecarBase64: string | undefined;
+	if (target.platform === "darwin") {
+		if (target.arch !== "arm64" && target.arch !== "x64") {
+			throw new Error(`Unsupported Darwin architecture for SpeechAnalyzer: ${target.arch}`);
+		}
+		const sidecarPath = path.join(repoRoot, "packages", "coding-agent", "dist", `omp-speech-analyzer-${target.arch}`);
+		await buildAppleSpeechSidecar(target.arch, sidecarPath);
+		appleSpeechSidecarBase64 = Buffer.from(await Bun.file(sidecarPath).bytes()).toString("base64");
+	}
 
 	await compileCodingAgent({
 		repoRoot,
 		entrypoint,
 		outfile: path.join(repoRoot, target.outfile),
 		transformersVersion,
+		appleSpeechSidecarBase64,
 		target: target.target,
 		minifyIdentifiers: true,
 		skipBuiltinCodesign: shouldAdhocSignDarwinBinary(target),

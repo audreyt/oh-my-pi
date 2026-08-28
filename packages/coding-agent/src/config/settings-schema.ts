@@ -1298,6 +1298,16 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"display.showTurnTime": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "appearance",
+			group: "Display",
+			label: "Show Turn Time",
+			description: "Show the total prompt-to-yield time (including tool calls) on assistant message usage rows",
+		},
+	},
 	"display.cacheMissMarker": {
 		type: "boolean",
 		default: false,
@@ -2426,7 +2436,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Speech Model",
 			description:
-				"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
+				"Local on-device speech engine. Parakeet TDT v3 remains the cross-platform default; Whisper tiers trade size for language coverage; Apple SpeechAnalyzer is an opt-in macOS 26 engine with system-managed locale assets.",
 			options: STT_MODEL_OPTIONS,
 		},
 	},

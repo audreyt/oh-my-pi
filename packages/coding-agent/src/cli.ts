@@ -35,6 +35,7 @@ import type { WorkerInbound as JsWorkerInbound, WorkerOutbound as JsWorkerOutbou
 import { DAEMON_BROKER_WORKER_ARG } from "./launch/protocol";
 import { TERMINAL_OUTPUT_WORKER_ARG } from "./launch/terminal-output-worker-protocol";
 import { LSP_MUX_WORKER_ARG } from "./lsp/mux/protocol";
+import { smokeTestAppleSpeechSidecar } from "./stt/apple-speech-client";
 import rootLicense from "./tools/browser/relay/extension-assets/LICENSE.txt" with { type: "text" };
 import thirdPartyNotices from "./tools/browser/relay/extension-assets/THIRD-PARTY-NOTICES.txt" with { type: "text" };
 import { COMPUTER_WORKER_ARG } from "./tools/computer/protocol";
@@ -120,6 +121,7 @@ async function runSmokeTest(): Promise<void> {
 
 	await smokeTestTinyTitleWorker();
 	await smokeTestSttWorker();
+	await smokeTestAppleSpeechSidecar();
 	await smokeTestJsEvalWorker();
 	await smokeTestComputerWorker();
 	await smokeTestTtsWorker();
