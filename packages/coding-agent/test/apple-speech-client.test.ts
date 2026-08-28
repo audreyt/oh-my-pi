@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AppleSpeechClient } from "@oh-my-pi/pi-coding-agent/stt/apple-speech-client";
+import { isAppleSpeechSdkVersionSupported } from "@oh-my-pi/pi-coding-agent/stt/apple-speech-compiler";
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
 
 const FAKE_SIDECAR = `#!/usr/bin/env bun
@@ -133,5 +134,14 @@ describe("AppleSpeechClient sidecar protocol", () => {
 		const stream = await client.startStream(`exit:${marker}`);
 		await exiting;
 		await expect(stream.stop()).rejects.toThrow(/fake sidecar stopped early|exited before completing/);
+	});
+});
+
+describe("Apple speech SDK gating", () => {
+	it("requires the macOS 26 SDK without rejecting newer SDKs", () => {
+		expect(isAppleSpeechSdkVersionSupported("15.5")).toBe(false);
+		expect(isAppleSpeechSdkVersionSupported("26.0")).toBe(true);
+		expect(isAppleSpeechSdkVersionSupported("27.1")).toBe(true);
+		expect(isAppleSpeechSdkVersionSupported("unknown")).toBe(false);
 	});
 });

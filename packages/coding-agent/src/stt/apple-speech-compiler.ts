@@ -2,6 +2,39 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { $which } from "@oh-my-pi/pi-utils";
 
+const MINIMUM_SPEECH_SDK_MAJOR = 26;
+let toolchainAvailability: Promise<boolean> | null = null;
+
+/** Whether an SDK version can compile the macOS 26 SpeechAnalyzer API. */
+export function isAppleSpeechSdkVersionSupported(version: string): boolean {
+	const sdkMajor = Number.parseInt(version.trim().split(".", 1)[0] ?? "", 10);
+	return Number.isFinite(sdkMajor) && sdkMajor >= MINIMUM_SPEECH_SDK_MAJOR;
+}
+
+async function probeAppleSpeechSidecarToolchain(): Promise<boolean> {
+	if (process.platform !== "darwin" || !$which("swiftc")) return false;
+	const xcrun = $which("xcrun");
+	if (!xcrun) return false;
+	const proc = Bun.spawn([xcrun, "--sdk", "macosx", "--show-sdk-version"], {
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [exitCode, stdout] = await Promise.all([
+		proc.exited,
+		new Response(proc.stdout as ReadableStream<Uint8Array>).text(),
+		new Response(proc.stderr as ReadableStream<Uint8Array>).text(),
+	]);
+	if (exitCode !== 0) return false;
+	return isAppleSpeechSdkVersionSupported(stdout);
+}
+
+/** Whether this host can compile the optional macOS 26 SpeechAnalyzer helper. */
+export function canCompileAppleSpeechSidecar(): Promise<boolean> {
+	toolchainAvailability ??= probeAppleSpeechSidecarToolchain();
+	return toolchainAvailability;
+}
+
 /** Darwin architecture accepted by the SpeechAnalyzer sidecar toolchain. */
 export type AppleSpeechArchitecture = "arm64" | "x64";
 
@@ -14,11 +47,11 @@ export interface AppleSpeechCompileOptions {
 
 /** Compile and ad-hoc sign the native SpeechAnalyzer helper for one Darwin architecture. */
 export async function compileAppleSpeechSidecar(options: AppleSpeechCompileOptions): Promise<void> {
-	if (process.platform !== "darwin") {
-		throw new Error("Apple SpeechAnalyzer sidecars can only be built on macOS.");
+	if (!(await canCompileAppleSpeechSidecar())) {
+		throw new Error("Apple SpeechAnalyzer compilation requires Xcode 26 or newer with the macOS 26 SDK.");
 	}
 	const swiftc = $which("swiftc");
-	if (!swiftc) throw new Error("Swift compiler not found; Xcode 26 or newer is required.");
+	if (!swiftc) throw new Error("Swift compiler disappeared after the SpeechAnalyzer toolchain probe.");
 	await fs.mkdir(path.dirname(options.outputPath), { recursive: true });
 	const targetArchitecture = options.architecture === "x64" ? "x86_64" : options.architecture;
 	const proc = Bun.spawn(

@@ -3,6 +3,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
+import { canCompileAppleSpeechSidecar } from "../src/stt/apple-speech-compiler";
 import { buildAppleSpeechSidecar } from "./apple-speech-sidecar";
 import { buildDocsIndexPayload } from "./generate-docs-index";
 
@@ -83,7 +84,7 @@ async function cleanBundleOutputs(): Promise<void> {
 async function main(): Promise<void> {
 	const start = Bun.nanoseconds();
 	await cleanBundleOutputs();
-	if (process.platform === "darwin") {
+	if (process.platform === "darwin" && (await canCompileAppleSpeechSidecar())) {
 		await Promise.all([
 			buildAppleSpeechSidecar("arm64", path.join(outDir, "omp-speech-analyzer-arm64")),
 			buildAppleSpeechSidecar("x64", path.join(outDir, "omp-speech-analyzer-x64")),
