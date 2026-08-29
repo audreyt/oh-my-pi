@@ -317,7 +317,10 @@ class FoundationModelsModel {
 			.map(message => message.content)
 			.join("\n");
 		try {
-			return await completeAfmCore({ instructions, prompt, maxTokens: request.maxNewTokens });
+			// Bound AFM completion tokens (1–1024) like the ONNX path caps
+			// generation length; the sidecar has no safe default of its own.
+			const maxTokens = Math.min(Math.max(1, request.maxNewTokens), 1024);
+			return await completeAfmCore({ instructions, prompt, maxTokens });
 		} catch (error) {
 			// Guardrail and empty-text failures are request-scoped: return
 			// empty (the client normalizes it to null) without failing the
