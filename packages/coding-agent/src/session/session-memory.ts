@@ -9,6 +9,7 @@ import { resolveMemoryBackend } from "../memory-backend/resolve";
 import type { MemoryBackendStartOptions } from "../memory-backend/types";
 import { disposeMnemonSessionState, resetMnemonConversationTracking } from "../mnemon/backend";
 import type { MnemopiSessionState } from "../mnemopi/state";
+import { releaseSharpshooterSession } from "../sharpshooter/backend";
 
 /** Capabilities borrowed from the owning AgentSession. */
 export interface SessionMemoryHost {
@@ -152,6 +153,11 @@ export class SessionMemory {
 
 	async #disposeMemoryBackendState(consolidateMnemopi = true): Promise<void> {
 		this.cancelLocalMemoryStartup();
+		try {
+			releaseSharpshooterSession(this.#host.memoryBackendSession());
+		} catch (error) {
+			logger.warn("Memory lifecycle: Sharpshooter dispose failed", { error: String(error) });
+		}
 		const hindsight = this.#host.getHindsightSessionState();
 		if (hindsight) {
 			try {
