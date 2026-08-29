@@ -374,6 +374,8 @@ async function generateCompletion(
 	systemPrompt: string | undefined,
 ): Promise<string | null> {
 	const spec = getTinyLocalModelSpec(modelKey);
+	const requested = maxTokens ?? MEMORY_COMPLETION_DEFAULT_MAX_NEW_TOKENS;
+	const maxNewTokens = Math.min(Math.max(1, requested), COMPLETION_MAX_NEW_TOKENS);
 	if (isFoundationModelsSpec(spec)) {
 		const blocked = foundationModelsUnavailableReason(spec);
 		if (blocked) throw new Error(`${modelKey} is unavailable: ${blocked}`);
@@ -381,7 +383,7 @@ async function generateCompletion(
 			const text = await completeAfmCore({
 				instructions: systemPrompt?.trim() ?? "",
 				prompt: promptText,
-				maxTokens,
+				maxTokens: maxNewTokens,
 			});
 			const generated = text.trim();
 			return generated === "" ? null : generated;
@@ -392,8 +394,6 @@ async function generateCompletion(
 	}
 	const generator = await loadPipeline(modelKey, transport, requestId);
 	const text = buildCompletionPrompt(generator.tokenizer, promptText, systemPrompt);
-	const requested = maxTokens ?? MEMORY_COMPLETION_DEFAULT_MAX_NEW_TOKENS;
-	const maxNewTokens = Math.min(Math.max(1, requested), COMPLETION_MAX_NEW_TOKENS);
 	const output = (await generator(text, {
 		max_new_tokens: maxNewTokens,
 		do_sample: false,

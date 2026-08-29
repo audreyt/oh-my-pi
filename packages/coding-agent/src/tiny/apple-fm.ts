@@ -89,7 +89,7 @@ async function bundledSidecarPath(): Promise<string | undefined> {
 
 async function publishSidecar(srcPath: string, destPath: string): Promise<void> {
 	const tmpPath = `${destPath}.${process.pid}.copy`;
-	const bytes = Buffer.from(await Bun.file(srcPath).arrayBuffer());
+	const bytes = await Bun.file(srcPath).arrayBuffer();
 	if (bytes.byteLength === 0) {
 		throw new Error(`bundled AFM sidecar is empty: ${srcPath}`);
 	}

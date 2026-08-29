@@ -362,4 +362,57 @@ process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
+
+	it("applies the completion default and ceiling before invoking AFM", async () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = writeFakeSidecar(
+				dir,
+				bunSidecar(`
+const raw = await Bun.stdin.text();
+const req = JSON.parse(raw);
+process.stdout.write(JSON.stringify({ text: String(req.maxTokens) }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+
+			const outbound: TinyTitleWorkerOutbound[] = [];
+			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
+			let seen = Promise.withResolvers<void>();
+			startTinyTitleWorker({
+				send(message) {
+					outbound.push(message);
+					if (message.type === "completion" || message.type === "error") seen.resolve();
+				},
+				onMessage(handler) {
+					inbound = handler;
+					return () => {
+						inbound = undefined;
+					};
+				},
+			});
+			inbound?.({
+				type: "complete",
+				id: "7",
+				modelKey: "afm-core",
+				prompt: "default cap",
+			});
+			await seen.promise;
+			expect(outbound.some(message => message.type === "completion" && message.text === "256")).toBe(true);
+			expect(outbound.some(message => message.type === "error")).toBe(false);
+
+			seen = Promise.withResolvers();
+			inbound?.({
+				type: "complete",
+				id: "8",
+				modelKey: "afm-core",
+				prompt: "ceiling cap",
+				maxTokens: 5000,
+			});
+			await seen.promise;
+			expect(outbound.some(message => message.type === "completion" && message.text === "1024")).toBe(true);
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });
