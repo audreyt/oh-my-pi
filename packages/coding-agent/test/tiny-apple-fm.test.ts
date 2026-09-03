@@ -287,4 +287,27 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
+	it("resolves null on abort without disabling AFM", async () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = writeFakeSidecar(
+				dir,
+				bunSidecar(`
+await Bun.sleep(1500);
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			const controller = new AbortController();
+			const startedAt = Date.now();
+			const pending = client.generate("afm-core", "fix the login button", { signal: controller.signal });
+			controller.abort();
+			await expect(pending).resolves.toBeNull();
+			expect(Date.now() - startedAt).toBeLessThan(1500);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });
