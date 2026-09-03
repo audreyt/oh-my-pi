@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getTinyModelsCacheDir, isEnoent, logger, readLines } from "@oh-my-pi/pi-utils";
 import type { Subprocess } from "bun";
+import { isThenable } from "../utils/ipc";
 import { replaceFileAtomically } from "../utils/atomic-file";
 import { compileAppleSpeechSidecar } from "./apple-speech-compiler";
 import type { SttStreamHandle, SttStreamOptions } from "./asr-client";
@@ -51,14 +52,6 @@ function unavailableStatus(error: unknown): AppleSpeechStatus {
 		systemManaged: true,
 		error: error instanceof Error ? error.message : String(error),
 	};
-}
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-	return (
-		((typeof value === "object" && value !== null) || typeof value === "function") &&
-		"then" in value &&
-		typeof value.then === "function"
-	);
 }
 
 function sha256(data: string | Uint8Array): string {
@@ -475,7 +468,7 @@ export class AppleSpeechClient {
 			.catch(fail);
 
 		const trackBackpressure = (result: unknown, byteLength: number): void => {
-			if (!isPromiseLike(result)) return;
+			if (!isThenable(result)) return;
 			pendingAudioBytes += byteLength;
 			const pending = Promise.resolve(result)
 				.then(() => {})
@@ -498,7 +491,7 @@ export class AppleSpeechClient {
 					const bytes = new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength);
 					const write = proc.stdin.write(bytes);
 					const flush = proc.stdin.flush();
-					if (isPromiseLike(write)) {
+					if (isThenable(write)) {
 						trackBackpressure(write, audio.byteLength);
 						trackBackpressure(flush, 0);
 					} else {

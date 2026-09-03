@@ -52,11 +52,15 @@ emit({ type: "segment", text: "hello world", index: 0 });
 emit({ type: "done", text: "hello world" });
 `;
 
-async function waitForFileCreation(file: string): Promise<void> {
-	const directory = path.dirname(file);
-	const basename = path.basename(file);
-	for await (const event of fs.watch(directory)) {
-		if (event.filename === basename) return;
+// Bounded poll (ts-no-test-timers exception): the marker file is created by an
+// external sidecar process on the platform clock, so fake timers cannot drive
+// it. The timeout bounds the wait instead of hanging on a missed fs event.
+async function waitForFileCreation(file: string, timeoutMs = 10_000): Promise<void> {
+	const start = Date.now();
+	for (;;) {
+		if (await Bun.file(file).exists()) return;
+		if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for ${file}`);
+		await Bun.sleep(25);
 	}
 }
 
