@@ -4013,10 +4013,11 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	/**
 	 * `/vibe` toggle. Entering installs the ephemeral vibe tools, strips the
-	 * active toolset down to `read`, UI-only `ask`, optional parent-owned `todo`,
-	 * plus those tools, and injects the director context. Exiting unregisters
-	 * them, restores the previous toolset, and kills every worker session so
-	 * workers cannot outlive the mode that directs them.
+	 * active toolset down to `read`, `ask` when built in and enabled on entry,
+	 * optional parent-owned `todo`, plus those tools, and injects the director
+	 * context. Exiting unregisters them, restores the previous toolset, and
+	 * kills every worker session so workers cannot outlive the mode that
+	 * directs them.
 	 */
 	async handleVibeModeCommand(
 		initialPrompt?: string,
