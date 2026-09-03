@@ -19,7 +19,11 @@ import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import * as vcs from "@oh-my-pi/pi-natives/vcs";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm, normalizeCustomMessagePayload, VIBE_MODE_CONTEXT_MESSAGE_TYPE } from "@oh-my-pi/pi-coding-agent/session/messages";
+import {
+	convertToLlm,
+	normalizeCustomMessagePayload,
+	VIBE_MODE_CONTEXT_MESSAGE_TYPE,
+} from "@oh-my-pi/pi-coding-agent/session/messages";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { FileSessionStorage, type WriteTextAtomicOptions } from "@oh-my-pi/pi-coding-agent/session/session-storage";
 import { VIBE_TOOL_NAMES } from "@oh-my-pi/pi-coding-agent/tools/vibe";
