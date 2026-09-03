@@ -26,7 +26,7 @@ import {
 	isAfmRequestScopedFailure,
 	probeAfmCore,
 } from "./apple-fm";
-import { buildCompletionPrompt } from "./completion-prompt";
+import { buildCompletionPrompt, renderTextChatTemplate } from "./completion-prompt";
 import { resolveTinyModelDevicePreference, type TinyModelDevice, tinyModelDeviceLoadOrder } from "./device";
 import { resolveTinyModelDtypeOverride, type TinyModelDtype } from "./dtype";
 import { formatTitleUserMessage } from "./message-preproc";
@@ -47,7 +47,7 @@ const TITLE_MAX_NEW_TOKENS = 20;
 const STOP_DECODE_WINDOW_TOKENS = 32;
 const MEMORY_COMPLETION_DEFAULT_MAX_NEW_TOKENS = 256;
 const COMPLETION_MAX_NEW_TOKENS = 1024;
-const TINY_TITLE_SYSTEM_PROMPT = prompt.render(titleSystemPrompt);
+const TINY_TITLE_SYSTEM_PROMPT = prompt.render(titleSystemPrompt, { includeExamples: false });
 
 const tinyModelDevicePreference = resolveTinyModelDevicePreference();
 const tinyModelDtypeOverride = resolveTinyModelDtypeOverride();
@@ -240,12 +240,11 @@ function buildPrompt(generator: TextGenerationPipeline, message: string, systemP
 		{ role: "system", content: selectedSystemPrompt },
 		{ role: "user", content: formatTitleUserMessage(message) },
 	];
-	const chatTemplateOptions = {
-		add_generation_prompt: true,
-		tokenize: false,
-		enable_thinking: false,
-	};
-	return `${generator.tokenizer.apply_chat_template(chat, chatTemplateOptions)}${TITLE_PREFILL}`;
+	const rendered = renderTextChatTemplate(generator.tokenizer, chat, {
+		addGenerationPrompt: true,
+		enableThinking: false,
+	});
+	return `${rendered}${TITLE_PREFILL}`;
 }
 
 function extractTinyTitle(text: string, sourceText: string): string | null {
