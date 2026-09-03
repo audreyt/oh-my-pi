@@ -159,7 +159,10 @@ async function resolveAppleSpeechExecutable(): Promise<string> {
 }
 
 function defaultExecutableResolver(): Promise<string> {
-	resolvedExecutable ??= resolveAppleSpeechExecutable();
+	resolvedExecutable ??= resolveAppleSpeechExecutable().catch((error: unknown) => {
+		resolvedExecutable = null;
+		throw error;
+	});
 	return resolvedExecutable;
 }
 
