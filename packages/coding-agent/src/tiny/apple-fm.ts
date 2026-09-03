@@ -29,9 +29,9 @@ function sidecarOverride(): string | undefined {
 }
 
 /** Env override disables the platform gate so tests can drive a fake sidecar anywhere. */
-export function foundationModelsUnavailableReason(spec: { unsupportedReason?: string }): string | undefined {
+export function foundationModelsUnavailableReason(): string | undefined {
 	if (sidecarOverride()) return undefined;
-	return spec.unsupportedReason;
+	return process.platform === "darwin" ? undefined : "Apple Foundation Models is macOS-only";
 }
 
 export function isAfmModelNotReady(error: unknown): boolean {

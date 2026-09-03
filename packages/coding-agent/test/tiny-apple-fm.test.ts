@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { resolveModels } from "@oh-my-pi/pi-coding-agent/cli/tiny-models-cli";
 import { getTinyLocalModelSpec, isFoundationModelsSpec } from "@oh-my-pi/pi-coding-agent/tiny/models";
-import type { TinyTitleWorkerInbound, TinyTitleWorkerOutbound } from "@oh-my-pi/pi-coding-agent/tiny/title-protocol";
+import { TinyTitleClient } from "../src/tiny/title-client";
 import {
 	AFM_CORE_SIDECAR_ENV,
 	completeAfmCore,
@@ -13,7 +13,6 @@ import {
 	probeAfmCore,
 	resolveBundledSidecarPath,
 } from "../src/tiny/apple-fm";
-import { startTinyTitleWorker } from "../src/tiny/worker";
 
 const previousSidecar = process.env[AFM_CORE_SIDECAR_ENV];
 
@@ -36,28 +35,23 @@ ${body}
 }
 
 describe("afm-core title registry", () => {
-	it("registers a Darwin-only foundation-models engine", () => {
+	it("registers a foundation-models engine the ONNX backend always refuses", () => {
 		const spec = getTinyLocalModelSpec("afm-core");
 		expect(spec).toBeDefined();
 		expect(isFoundationModelsSpec(spec)).toBe(true);
 		expect(spec?.repo).toBe("apple.SystemLanguageModel");
-		if (process.platform === "darwin") {
-			expect(spec?.unsupportedReason).toBeUndefined();
-		} else {
-			expect(spec?.unsupportedReason).toBe("Apple Foundation Models is macOS-only");
-		}
+		expect(spec?.onnxUnsupportedReason).toBe("Apple Foundation Models uses the SystemLanguageModel engine, not ONNX");
 	});
 
-	it("lets OMP_APPLE_FM_SIDECAR bypass the platform gate", () => {
-		const spec = getTinyLocalModelSpec("afm-core");
-		expect(spec).toBeDefined();
-		if (!spec) return;
+	it("gates availability on Darwin unless OMP_APPLE_FM_SIDECAR is set", () => {
 		delete process.env[AFM_CORE_SIDECAR_ENV];
 		if (process.platform !== "darwin") {
-			expect(foundationModelsUnavailableReason(spec)).toBe("Apple Foundation Models is macOS-only");
+			expect(foundationModelsUnavailableReason()).toBe("Apple Foundation Models is macOS-only");
+		} else {
+			expect(foundationModelsUnavailableReason()).toBeUndefined();
 		}
 		process.env[AFM_CORE_SIDECAR_ENV] = "/tmp/does-not-need-to-exist-for-this-check";
-		expect(foundationModelsUnavailableReason(spec)).toBeUndefined();
+		expect(foundationModelsUnavailableReason()).toBeUndefined();
 	});
 
 	it("keeps afm-core out of download all even when Darwin-ready", () => {
@@ -127,8 +121,8 @@ process.exit(1);
 	});
 });
 
-describe("tiny worker AFM titles", () => {
-	it("generates a title without loading transformers", async () => {
+describe("afm-core client titles", () => {
+	it("generates a title without spawning a worker", async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		try {
 			const sidecar = writeFakeSidecar(
@@ -143,33 +137,17 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			const seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "title" || message.type === "error" || message.type === "downloaded") {
-						seen.resolve();
-					}
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
 			});
-			inbound?.({
-				type: "generate",
-				id: "1",
-				modelKey: "afm-core",
-				message: "the login button is broken on mobile",
-			});
-			await seen.promise;
-			expect(outbound.some(message => message.type === "title" && message.title === "Fix login button")).toBe(true);
-			expect(outbound.some(message => message.type === "error")).toBe(false);
+			await expect(client.generate("afm-core", "the login button is broken on mobile")).resolves.toBe(
+				"Fix login button",
+			);
+			expect(events).toContain("initiate");
+			expect(events).toContain("ready");
+			expect(events).not.toContain("error");
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
@@ -185,31 +163,14 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			const seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "downloaded" || message.type === "error") seen.resolve();
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
-			});
-			inbound?.({ type: "download", id: "2", modelKey: "afm-core" });
-			await seen.promise;
-			expect(outbound.some(message => message.type === "downloaded" && message.id === "2")).toBe(true);
+			const client = new TinyTitleClient();
+			await expect(client.downloadModel("afm-core")).resolves.toEqual({ ok: true });
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
 
-	it("returns no title on modelNotReady instead of a worker error", async () => {
+	it("returns no title on modelNotReady and recovers when ready later", async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		try {
 			const sidecar = writeFakeSidecar(
@@ -220,27 +181,20 @@ process.exit(1);
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			const seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "title" || message.type === "error") seen.resolve();
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
 			});
-			inbound?.({ type: "generate", id: "3", modelKey: "afm-core", message: "fix the login button" });
-			await seen.promise;
-			expect(outbound.some(message => message.type === "title" && message.title === null)).toBe(true);
-			expect(outbound.some(message => message.type === "progress" && message.event.status === "error")).toBe(true);
-			expect(outbound.some(message => message.type === "error")).toBe(false);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+			expect(events).toContain("error");
+			fs.writeFileSync(
+				sidecar,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
+`),
+			);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
@@ -257,33 +211,26 @@ process.exit(1);
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			const seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "title" || message.type === "error") seen.resolve();
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
 			});
-			inbound?.({ type: "generate", id: "5", modelKey: "afm-core", message: "fix the login button" });
-			await seen.promise;
-			expect(outbound.some(message => message.type === "title" && message.title === null)).toBe(true);
-			expect(outbound.some(message => message.type === "progress" && message.event.status === "error")).toBe(false);
-			expect(outbound.some(message => message.type === "error")).toBe(false);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+			expect(events).not.toContain("error");
+			fs.writeFileSync(
+				sidecar,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
+`),
+			);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
 
-	it("still fails the worker on permanent AFM unavailability", async () => {
+	it("disables AFM after a terminal failure", async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		try {
 			const sidecar = writeFakeSidecar(
@@ -294,123 +241,15 @@ process.exit(1);
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			const seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "title" || message.type === "error") seen.resolve();
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
-			});
-			inbound?.({ type: "generate", id: "6", modelKey: "afm-core", message: "fix the login button" });
-			await seen.promise;
-			expect(outbound.some(message => message.type === "error")).toBe(true);
-			expect(outbound.some(message => message.type === "title")).toBe(false);
-		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("completes through the sidecar without loading transformers", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
-		try {
-			const sidecar = writeFakeSidecar(
-				dir,
+			const client = new TinyTitleClient();
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+			fs.writeFileSync(
+				sidecar,
 				bunSidecar(`
-const raw = await Bun.stdin.text();
-const req = JSON.parse(raw);
-if (req.maxTokens !== 16) throw new Error("missing maxTokens");
-process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
 `),
 			);
-			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			const seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "completion" || message.type === "error") seen.resolve();
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
-			});
-			inbound?.({
-				type: "complete",
-				id: "4",
-				modelKey: "afm-core",
-				prompt: "did the model stop unexpectedly?",
-				maxTokens: 16,
-			});
-			await seen.promise;
-			expect(outbound.some(message => message.type === "completion" && message.text === "yes")).toBe(true);
-			expect(outbound.some(message => message.type === "error")).toBe(false);
-		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("applies the completion default and ceiling before invoking AFM", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
-		try {
-			const sidecar = writeFakeSidecar(
-				dir,
-				bunSidecar(`
-const raw = await Bun.stdin.text();
-const req = JSON.parse(raw);
-process.stdout.write(JSON.stringify({ text: String(req.maxTokens) }) + "\\n");
-`),
-			);
-			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-
-			const outbound: TinyTitleWorkerOutbound[] = [];
-			let inbound: ((message: TinyTitleWorkerInbound) => void) | undefined;
-			let seen = Promise.withResolvers<void>();
-			startTinyTitleWorker({
-				send(message) {
-					outbound.push(message);
-					if (message.type === "completion" || message.type === "error") seen.resolve();
-				},
-				onMessage(handler) {
-					inbound = handler;
-					return () => {
-						inbound = undefined;
-					};
-				},
-			});
-			inbound?.({
-				type: "complete",
-				id: "7",
-				modelKey: "afm-core",
-				prompt: "default cap",
-			});
-			await seen.promise;
-			expect(outbound.some(message => message.type === "completion" && message.text === "256")).toBe(true);
-			expect(outbound.some(message => message.type === "error")).toBe(false);
-
-			seen = Promise.withResolvers();
-			inbound?.({
-				type: "complete",
-				id: "8",
-				modelKey: "afm-core",
-				prompt: "ceiling cap",
-				maxTokens: 5000,
-			});
-			await seen.promise;
-			expect(outbound.some(message => message.type === "completion" && message.text === "1024")).toBe(true);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
