@@ -147,7 +147,7 @@ async function buildBinary(target: BinaryTarget): Promise<void> {
 		return;
 	}
 	let appleSpeechSidecarBase64: string | undefined;
-	if (target.platform === "darwin") {
+	if (target.platform === "darwin" && process.platform === "darwin") {
 		if (target.arch !== "arm64" && target.arch !== "x64") {
 			throw new Error(`Unsupported Darwin architecture for SpeechAnalyzer: ${target.arch}`);
 		}
