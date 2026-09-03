@@ -104,6 +104,7 @@ import {
 	resolveGitHubCopilotBaseUrl,
 } from "./github-copilot-headers";
 import { getOpenAIPromptCacheKey } from "./openai-shared";
+import { applyInferenceHeaders } from "./inference-headers";
 import { transformMessages } from "./transform-messages";
 import { NON_VISION_IMAGE_PLACEHOLDER } from "./vision-guard";
 
@@ -1238,7 +1239,7 @@ export type AnthropicClientOptionsArgs = {
 	disableStrictTools?: boolean;
 	fetch?: FetchImpl;
 	maxRetryDelayMs?: number;
-	claudeCodeSessionId?: string;
+	sessionId?: string;
 };
 
 export type AnthropicClientOptionsResult = {
@@ -1628,13 +1629,6 @@ async function* observeDecodedAnthropicSdkEvents(
 const PROVIDER_MAX_RETRIES = 10;
 
 /**
- * Flat delay between attempts when Copilot 400s a model its own `/models`
- * catalog advertises. Part of the fleet carries the model and part doesn't, so
- * the retry is a reroll rather than a wait for capacity to free up.
- */
-const COPILOT_MODEL_FLAP_RETRY_DELAY_MS = 400;
-
-/**
  * How long `ping` keepalives may keep extending the idle deadline without any
  * semantic stream progress, as a multiple of the idle timeout. Anthropic pings
  * across legitimate generation gaps, so pings count as liveness — but a wedged
@@ -1659,20 +1653,6 @@ function shouldIgnoreAnthropicPreambleEvent(eventType: unknown): boolean {
 	if (typeof eventType !== "string") return false;
 	if (eventType === "ping") return true;
 	return !ANTHROPIC_MESSAGE_EVENTS.has(eventType);
-}
-
-/**
- * Whether an Anthropic (or Copilot-over-Anthropic) stream error should be
- * retried. The classification lives in {@link AIError.isProviderRetryableError};
- * this wrapper injects the Copilot-specific model-availability transient check,
- * which the error module must not import directly.
- */
-export function isProviderRetryableError(error: unknown, provider?: string): boolean {
-	return AIError.isProviderRetryableError(error, {
-		provider,
-		isProviderTransient:
-			provider === "github-copilot" ? (err): boolean => AIError.isCopilotTransientModelError(err) : undefined,
-	});
 }
 
 const THINKING_ENVELOPE_OPEN = "<thinking>";
@@ -2198,7 +2178,10 @@ const streamAnthropicOnce = (
 					thinkingDisplay: options?.thinkingDisplay,
 					fetch: options?.fetch,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
-					claudeCodeSessionId: options?.sessionId ?? extractClaudeMetadataSessionId(options?.metadata?.user_id),
+					sessionId:
+						options?.sessionId ??
+						extractClaudeMetadataSessionId(options?.metadata?.user_id) ??
+						options?.promptCacheKey,
 					disableStrictTools,
 				});
 				client = created.client;
@@ -3071,7 +3054,7 @@ const streamAnthropicOnce = (
 						!isLocalIdleTimeout &&
 						firstTokenTime === undefined &&
 						!streamedReplayUnsafeContent &&
-						isProviderRetryableError(streamFailure, model.provider);
+						AIError.isProviderRetryableError(streamFailure);
 					if (
 						activeAbortTracker.wasCallerAbort() ||
 						providerRetryAttempt >= PROVIDER_MAX_RETRIES ||
@@ -3080,12 +3063,7 @@ const streamAnthropicOnce = (
 						throw streamFailure;
 					}
 					providerRetryAttempt++;
-					// Copilot's model-availability 400 is a per-request replica reroll, not
-					// upstream backpressure — the exponential curve would just add dead
-					// time to a coin flip that the next attempt is as likely to win.
-					const backoffDelayMs = AIError.isCopilotTransientModelError(streamFailure)
-						? COPILOT_MODEL_FLAP_RETRY_DELAY_MS
-						: calculateAnthropicRetryDelayMs(providerRetryAttempt - 1);
+					const backoffDelayMs = calculateAnthropicRetryDelayMs(providerRetryAttempt - 1);
 					// Honor the server's retry hint (`retry-after-ms`/`retry-after`) on
 					// 429/529-style failures: retrying sooner than the server asked is a
 					// guaranteed failure that just burns the retry budget.
@@ -3229,7 +3207,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		thinkingEnabled = false,
 		isOAuth,
 		maxRetryDelayMs,
-		claudeCodeSessionId,
+		sessionId,
 		disableStrictTools: disableStrictToolsOverride,
 	} = args;
 	const compat = model.compat;
@@ -3292,6 +3270,11 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 			dynamicHeaders,
 			headers,
 		);
+		applyInferenceHeaders(defaultHeaders, {
+			provider: model.provider,
+			protocol: "anthropic",
+			sessionId,
+		});
 
 		return {
 			isOAuthToken: false,
@@ -3314,22 +3297,23 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		betaFeatures.push(interleavedThinkingBeta);
 	}
 
+	const requestModelHeaders = mergeHeaders(
+		model.headers,
+		foundryCustomHeaders,
+		getUmansWebSearchHeader(model, mergeHeaders(model.headers, headers)),
+		headers,
+		dynamicHeaders,
+	);
 	const defaultHeaders = buildAnthropicHeaders({
 		apiKey,
 		baseUrl,
 		isOAuth: oauthToken,
 		extraBetas: betaFeatures,
 		stream,
-		modelHeaders: mergeHeaders(
-			model.headers,
-			foundryCustomHeaders,
-			getUmansWebSearchHeader(model, mergeHeaders(model.headers, headers)),
-			headers,
-			dynamicHeaders,
-		),
+		modelHeaders: requestModelHeaders,
 		isCloudflareAiGateway: model.provider === "cloudflare-ai-gateway",
 		allowAnthropicHeaderOverrides: model.compat.allowAnthropicHeaderOverrides,
-		claudeCodeSessionId,
+		claudeCodeSessionId: sessionId,
 		claudeCodeBetas: oauthToken
 			? buildClaudeCodeBetas({
 					agentRequest: hasTools || thinkingEnabled,
@@ -3338,6 +3322,11 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 					supportsContextManagement: model.compat.supportsContextManagement,
 				})
 			: [],
+	});
+	applyInferenceHeaders(defaultHeaders, {
+		provider: model.provider,
+		protocol: "anthropic",
+		sessionId,
 	});
 
 	if (model.provider === "cloudflare-ai-gateway") {

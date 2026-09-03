@@ -905,8 +905,10 @@ export type ResolvedDevinCompat = Required<DevinCompat>;
 export interface GoogleCompat {
 	/** Whether functionCall/functionResponse parts carry the `id` field. */
 	supportsFunctionPartId?: boolean;
-	/** Whether replayed thinking parts must be skipped when they carry no signature. */
+	/** Add the bypass sentinel to every unsigned Gemini function call. */
 	requiresSkipThoughtSignature?: boolean;
+	/** Add the bypass sentinel when a Gemini turn's first function call is unsigned. */
+	requiresSkipThoughtSignatureOnFirstFunctionCall?: boolean;
 	/** Drop unsigned thinking blocks from replayed history (Antigravity Claude). */
 	dropUnsignedThinking?: boolean;
 	/** Cloud Code Assist legacy `parameters` schema field instead of `parametersJsonSchema`. */
@@ -1171,6 +1173,10 @@ export interface Model<TApi extends Api = Api> {
 	isRecommended?: boolean;
 	/** Canonical thinking capability metadata for this model. */
 	thinking?: ThinkingConfig;
+	/** Intelligence score delivered by the model catalog. */
+	int?: number | null;
+	/** Catalog-estimated output speed in tokens per second. */
+	tps?: number | null;
 	/**
 	 * Fully-resolved compatibility record, materialized once by `buildModel`.
 	 * Protocol handlers read fields; they never detect, resolve, or allocate.
