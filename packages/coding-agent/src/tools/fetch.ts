@@ -678,6 +678,7 @@ export async function renderHtmlToText(
 				apiKey,
 				signal: remoteSignal(),
 				fetch: fetchImpl,
+				maxChars: MAX_OUTPUT_CHARS,
 			});
 		},
 		jina: async () => {
