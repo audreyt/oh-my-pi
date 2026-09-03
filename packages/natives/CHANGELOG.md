@@ -9,6 +9,10 @@
 - Added utility functions for managing edit mode and generating edit descriptions
 - Added notebookToEditableText and extractInlineSloppyRegions utilities
 
+### Fixed
+
+- Fixed `stageFiles` ignoring nested `.gitignore` files and duplicate NFD entries under `core.precomposeUnicode` ([#10217](https://github.com/can1357/oh-my-pi/pull/10217)).
+
 ## [18.1.5] - 2026-09-03
 
 ### Changed

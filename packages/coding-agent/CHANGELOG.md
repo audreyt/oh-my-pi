@@ -27,6 +27,7 @@
 
 ### Fixed
 
+- Fixed `omp commit` staging files ignored by nested `.gitignore` rules and macOS NFD Unicode duplicates ([#10217](https://github.com/can1357/oh-my-pi/pull/10217)).
 - Fixed embedded title models receiving online few-shot examples and failing on tokenizer templates containing generation-mask statements.
 - Fixed Alt+P model searches retaining the current model's list position after results changed; selection now moves to the best match unless every preceding choice remains unchanged
 - Fixed model picker searches ignoring provider preferences; explicitly ordered, role-assigned, and recently used providers now rank first among similarly relevant matches
