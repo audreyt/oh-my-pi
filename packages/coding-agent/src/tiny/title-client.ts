@@ -19,6 +19,7 @@ import { stageRunnerScript } from "../eval/runner-cache";
 import titleSystemPrompt from "../prompts/system/title-system.md" with { type: "text" };
 import {
 	completeAfmCore,
+	type AfmStatus,
 	foundationModelsUnavailableReason,
 	isAfmModelNotReady,
 	isAfmRequestScopedFailure,
@@ -609,7 +610,7 @@ export class TinyTitleClient {
 		if (!isTinyTitleLocalModelKey(modelKey)) return null;
 		if (options.signal?.aborted || this.#failedModels.has(modelKey)) return null;
 		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey)))
-			return this.#generateFoundationModels(modelKey, message, options.systemPrompt);
+			return this.#generateFoundationModels(modelKey, message, options.systemPrompt, options.signal);
 		const { promise, resolve } = Promise.withResolvers<string | null>();
 		const request: TinyWorkerRequest = {
 			type: "chat",
@@ -796,31 +797,49 @@ export class TinyTitleClient {
 		modelKey: TinyTitleLocalModelKey,
 		message: string,
 		systemPrompt?: string,
+		signal?: AbortSignal,
 	): Promise<string | null> {
 		const spec = getTinyTitleModelSpec(modelKey);
-		const blocked = foundationModelsUnavailableReason();
+		const blocked = foundationModelsUnavailableReason(spec);
 		if (blocked) {
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 			this.#failedModels.add(modelKey);
 			return null;
 		}
+		if (signal?.aborted) return null;
 		this.#emitProgress({ modelKey, status: "initiate", name: spec.repo });
+		const abort = Promise.withResolvers<{ kind: "aborted" }>();
+		const onAbort = () => abort.resolve({ kind: "aborted" });
+		if (signal) signal.addEventListener("abort", onAbort, { once: true });
 		try {
-			const text = await completeAfmCore({
+			const completion = completeAfmCore({
 				instructions: systemPrompt?.trim() || TINY_TITLE_SYSTEM_PROMPT,
 				prompt: formatTitleUserMessage(message),
-			});
-			this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
-			return extractTinyTitle(text, message);
+			}).then(
+				text => ({ kind: "done", text }) as const,
+				error => ({ kind: "failed", error }) as const,
+			);
+			const outcome = signal ? await Promise.race([completion, abort.promise]) : await completion;
+			if (outcome.kind === "aborted") return null;
+			if (outcome.kind === "done") {
+				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+				return extractTinyTitle(outcome.text, message);
+			}
+			throw outcome.error;
 		} catch (error) {
 			if (isAfmModelNotReady(error)) {
 				this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 				return null;
 			}
-			if (isAfmRequestScopedFailure(error)) return null;
+			if (isAfmRequestScopedFailure(error)) {
+				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+				return null;
+			}
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 			this.#failedModels.add(modelKey);
 			return null;
+		} finally {
+			signal?.removeEventListener("abort", onAbort);
 		}
 	}
 
@@ -832,10 +851,17 @@ export class TinyTitleClient {
 		modelKey: TinyLocalModelKey,
 		spec: TinyTitleLocalModelSpec,
 	): Promise<TinyTitleDownloadResult> {
-		const blocked = foundationModelsUnavailableReason();
+		const blocked = foundationModelsUnavailableReason(spec);
 		if (blocked) return { ok: false, error: `${modelKey} is unavailable: ${blocked}` };
 		this.#emitProgress({ modelKey, status: "initiate", name: spec.repo });
-		const status = await probeAfmCore();
+		let status: AfmStatus;
+		try {
+			status = await probeAfmCore();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
+			return { ok: false, error: message };
+		}
 		if (!status.available) return { ok: false, error: status.reason ?? "Apple Foundation Model unavailable" };
 		this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
 		return { ok: true };

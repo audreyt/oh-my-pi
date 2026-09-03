@@ -167,7 +167,7 @@ Of the runnable options, the registry marks `lfm2-1.2b` as the recommended local
 `gemma-3-1b` favors consolidation quality, while `qwen2.5-1.5b` favors fine-grained extraction.
 
 **Configured local options**: `llama3.2:3b`, `qwen3-1.7b` (currently disabled as described above),
-`gemma-3-1b`, `qwen2.5-1.5b`, and `lfm2-1.2b` (memory tasks stay on ONNX registries; Apple Foundation Models is title-only).
+`gemma-3-1b`, `qwen2.5-1.5b`, and `lfm2-1.2b`. Apple Foundation Models (`afm-core`) is title-only and is not a memory option.
 **Default setting**: `online`.
 
 ### Known Mnemopi parser bugs (surfaced by these experiments)

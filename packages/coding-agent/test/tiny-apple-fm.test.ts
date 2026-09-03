@@ -35,23 +35,29 @@ ${body}
 }
 
 describe("afm-core title registry", () => {
-	it("registers a foundation-models engine the ONNX backend always refuses", () => {
+	it("registers a Darwin-only foundation-models engine", () => {
 		const spec = getTinyLocalModelSpec("afm-core");
 		expect(spec).toBeDefined();
 		expect(isFoundationModelsSpec(spec)).toBe(true);
 		expect(spec?.repo).toBe("apple.SystemLanguageModel");
+		if (process.platform === "darwin") {
+			expect(spec?.unsupportedReason).toBeUndefined();
+		} else {
+			expect(spec?.unsupportedReason).toBe("Apple Foundation Models is macOS-only");
+		}
 		expect(spec?.onnxUnsupportedReason).toBe("Apple Foundation Models uses the SystemLanguageModel engine, not ONNX");
 	});
 
-	it("gates availability on Darwin unless OMP_APPLE_FM_SIDECAR is set", () => {
+	it("lets OMP_APPLE_FM_SIDECAR bypass the platform gate", () => {
+		const spec = getTinyLocalModelSpec("afm-core");
+		expect(spec).toBeDefined();
+		if (!spec) return;
 		delete process.env[AFM_CORE_SIDECAR_ENV];
 		if (process.platform !== "darwin") {
-			expect(foundationModelsUnavailableReason()).toBe("Apple Foundation Models is macOS-only");
-		} else {
-			expect(foundationModelsUnavailableReason()).toBeUndefined();
+			expect(foundationModelsUnavailableReason(spec)).toBe("Apple Foundation Models is macOS-only");
 		}
 		process.env[AFM_CORE_SIDECAR_ENV] = "/tmp/does-not-need-to-exist-for-this-check";
-		expect(foundationModelsUnavailableReason()).toBeUndefined();
+		expect(foundationModelsUnavailableReason(spec)).toBeUndefined();
 	});
 
 	it("keeps afm-core out of download all even when Darwin-ready", () => {
