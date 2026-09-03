@@ -11,6 +11,7 @@ import { getSearchProviderLabel } from "@oh-my-pi/pi-tui/tools/web-search";
 
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
 import type { SearchProvider } from "./providers/base";
+import { KeenableProvider } from "./providers/keenable";
 import { SEARCH_PROVIDER_LABELS, type SearchProviderId } from "@oh-my-pi/pi-tui/tools/web-search";
 import { SEARCH_PROVIDER_ORDER, SearchProviderError } from "./types";
 
@@ -84,7 +85,7 @@ const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 	keenable: {
 		id: "keenable",
 		label: SEARCH_PROVIDER_LABELS.keenable,
-		load: async () => new (await import("./providers/keenable")).KeenableProvider(),
+		load: async () => new KeenableProvider(),
 	},
 	firecrawl: {
 		id: "firecrawl",
