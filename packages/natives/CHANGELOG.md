@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added EditSession and EditStore types for managing edit states and snapshots
+- Added utility functions for handling hashline operations and formatting
+- Added utility functions for managing edit mode and generating edit descriptions
+- Added notebookToEditableText and extractInlineSloppyRegions utilities
+
+## [18.1.5] - 2026-09-03
+
+### Changed
+
+- Updated `worktreeAdd` to support additional worktree creation options, including preserving uncommitted changes.
+
+## [18.1.3] - 2026-09-02
+
+### Fixed
+
+- Fixed `grep` and `sed` treating basic regular expressions as extended ones, which silently matched every line for patterns like `^+` or `s/^\+/` and swapped the meanings of `+` and `\+` ([#10298](https://github.com/can1357/oh-my-pi/pull/10298) by [@mruangutai](https://github.com/mruangutai)).
+
+## [18.1.0] - 2026-09-01
+
+### Fixed
+
+- Fixed TTY output backpressure reporting so pending write progress is accurately reflected during large writes.
+
+## [18.0.11] - 2026-08-29
+
+### Fixed
+
+- Fixed staging and committing files through a reused Git repository handle, ensuring newly staged changes are correctly included in commits even on filesystems with coarse timestamp resolution.
+
 ## [18.0.10] - 2026-08-28
 
 ### Added
