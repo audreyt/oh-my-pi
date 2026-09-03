@@ -176,6 +176,33 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 		}
 	});
 
+	it("closes the probe lifecycle when the model reports unavailable", async () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = writeFakeSidecar(
+				dir,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ available: false, reason: "deviceNotEligible" }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
+			await expect(client.downloadModel("afm-core")).resolves.toEqual({
+				ok: false,
+				error: "deviceNotEligible",
+			});
+			expect(events).toContain("initiate");
+			expect(events).toContain("error");
+			expect(events).not.toContain("ready");
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("returns no title on modelNotReady and recovers when ready later", async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		try {

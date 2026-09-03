@@ -790,8 +790,9 @@ export class TinyTitleClient {
 	/**
 	 * Title generation through Apple Foundation Models: no worker to spawn,
 	 * so this runs inline and mirrors the worker error contract (null plus a
-	 * progress error, never a rejection) while disabling AFM until restart
-	 * when the model itself is not ready.
+	 * progress error, never a rejection). Transient states (`modelNotReady`,
+	 * request-scoped refusals) stay recoverable; only terminal availability
+	 * failures disable AFM until restart.
 	 */
 	async #generateFoundationModels(
 		modelKey: TinyTitleLocalModelKey,
@@ -862,7 +863,10 @@ export class TinyTitleClient {
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 			return { ok: false, error: message };
 		}
-		if (!status.available) return { ok: false, error: status.reason ?? "Apple Foundation Model unavailable" };
+		if (!status.available) {
+			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
+			return { ok: false, error: status.reason ?? "Apple Foundation Model unavailable" };
+		}
 		this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
 		return { ok: true };
 	}
