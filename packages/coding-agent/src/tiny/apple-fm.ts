@@ -1,8 +1,8 @@
-import type { TinyTitleLocalModelSpec } from "./models";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils";
 import { withFileLock } from "@oh-my-pi/pi-utils/file-lock";
+import type { TinyTitleLocalModelSpec } from "./models";
 import bundledArm64Identity from "./apple-fm/prebuilt/arm64-apple-macosx26.0/digest.txt" with { type: "text" };
 import bundledArm64Sidecar from "./apple-fm/prebuilt/arm64-apple-macosx26.0/omp-apple-fm" with { type: "file" };
 import sidecarSource from "./apple-fm/sidecar.swift" with { type: "text" };
