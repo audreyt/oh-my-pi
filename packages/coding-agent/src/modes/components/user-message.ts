@@ -50,10 +50,11 @@ export class UserMessageComponent extends Container {
 		// fenced blocks through its own code styling (never `color`), so those are already excluded;
 		// `highlightMagicKeywords` additionally restores the bubble's own foreground after each
 		// painted keyword so the gradient never bleeds into the rest of the line.
-		const keywordReset = theme.getFgAnsi("userMessageText") || "\x1b[39m";
+		const keywordReset = theme.getFgOnBgAnsi("userMessageText", "userMessageBg");
 		const baseText = synthetic
 			? (value: string) => theme.fg("dim", value)
-			: (value: string) => theme.fg("userMessageText", highlightMagicKeywords(value, keywordReset));
+			: (value: string) =>
+					theme.fgOnBg("userMessageText", "userMessageBg", highlightMagicKeywords(value, keywordReset));
 		const color = (value: string) =>
 			renderPlaceholders(value, {
 				renderText: baseText,
@@ -64,7 +65,9 @@ export class UserMessageComponent extends Container {
 						form === "chip"
 							? `${attachmentSgr(kind, index)}\x1b[1m${label}\x1b[22m${keywordReset}`
 							: theme.fg("accent", `\x1b[1m${label}\x1b[22m`);
-					return kind === "image" ? imageReferenceHyperlink(label, index, imageLinks, () => styled) : styled;
+					return kind === "image" || kind === "video"
+						? imageReferenceHyperlink(label, index, imageLinks, () => styled)
+						: styled;
 				},
 			});
 		const md = new Markdown(text, 1, 1, getMarkdownTheme(), {

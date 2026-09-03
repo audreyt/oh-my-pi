@@ -736,6 +736,49 @@ describe("ModelRegistry", () => {
 			expect(getReplayUnsignedThinking(registry.find("anthropic", "claude-sonnet-5"))).toBe(false);
 		});
 
+		test("catalog metrics enrich models discovered through a custom provider", async () => {
+			writeRawModelsJson({
+				cliproxy: {
+					baseUrl: "https://proxy.example/v1",
+					apiKey: "TEST_KEY",
+					api: "openai-responses",
+					discovery: { type: "openai-models-list" },
+					models: [],
+				},
+			});
+			const fetchMock: FetchImpl = async input => {
+				const url = String(input);
+				if (url === "https://catalog.stencil.so/models.json.zstd") {
+					return Response.json({
+						openai: {
+							id: "openai",
+							name: "OpenAI",
+							models: {
+								"gpt-5.6-sol": {
+									id: "gpt-5.6-sol",
+									name: "GPT-5.6 Sol",
+									tool_call: true,
+									int: 60.9,
+									tps: 70.4,
+								},
+							},
+						},
+					});
+				}
+				if (url === "https://proxy.example/v1/models") {
+					return Response.json({ data: [{ id: "gpt-5.6-sol" }] });
+				}
+				throw new Error(`Unexpected URL: ${url}`);
+			};
+			const registry = new ModelRegistry(authStorage, modelsJsonPath, { fetch: fetchMock });
+
+			await registry.refresh("online");
+
+			const model = registry.find("cliproxy", "gpt-5.6-sol");
+			expect(model?.int).toBe(60.9);
+			expect(model?.tps).toBe(70.4);
+		});
+
 		test("custom Responses providers can disable original image detail", () => {
 			const model = customResponsesCompat.find("cc-switch", "gpt-5.5");
 			const compat = getOpenAICompat(model);
@@ -1681,6 +1724,7 @@ describe("ModelRegistry", () => {
 
 		test("reapplyModelPolicies re-clamps and restores premium windows on toggle", async () => {
 			await Settings.init({ inMemory: true });
+			settings.set("extendedContext", true);
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
 			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(1_050_000);
 
@@ -2048,8 +2092,8 @@ describe("ModelRegistry", () => {
 								},
 								...bundledModels.slice(1),
 								buildModel({
-									id: "glm-5.3-flash",
-									name: "GLM-5.3-Flash",
+									id: "glm-experimental-probe",
+									name: "GLM Experimental Probe",
 									api: "anthropic-messages",
 									provider: "zai",
 									baseUrl: "https://api.z.ai/api/anthropic",
@@ -2527,7 +2571,7 @@ describe("ModelRegistry", () => {
 				contextWindow: bundledModel.contextWindow,
 				maxTokens: bundledModel.maxTokens,
 			});
-			expect(sharedCatalogCache.find("zai", "glm-5.3-flash")).toMatchObject({
+			expect(sharedCatalogCache.find("zai", "glm-experimental-probe")).toMatchObject({
 				contextWindow: 1_000_000,
 				maxTokens: 131_072,
 			});

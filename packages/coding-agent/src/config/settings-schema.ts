@@ -105,8 +105,13 @@ export type ComposerShape = string;
 /** Built-in composer choices and their shared settings/setup copy. */
 export const BUILTIN_COMPOSER_SHAPES = [
 	{
+		value: "band",
+		label: "Status Band (Default)",
+		description: "Flush soft-capped status band above a curved prompt, no frame",
+	},
+	{
 		value: "box",
-		label: "Rounded Box (Default)",
+		label: "Rounded Box",
 		description: "Status line embedded in top border, compact 2-line prompt",
 	},
 	{
@@ -211,7 +216,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Git",
 	],
 	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
-	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
+	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight", "Sharpshooter"],
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
 	shell: ["Bash", "Eval & Runtimes"],
 	tools: [
@@ -595,6 +600,8 @@ export const SETTINGS_SCHEMA = {
 
 	enabledModels: { type: "array", default: EMPTY_STRING_ARRAY },
 
+	enabledProviders: { type: "array", default: EMPTY_STRING_ARRAY },
+
 	disabledProviders: { type: "array", default: EMPTY_STRING_ARRAY },
 
 	"providers.maxInFlightRequests": {
@@ -727,7 +734,7 @@ export const SETTINGS_SCHEMA = {
 	// Composer
 	"composer.shape": {
 		type: "string",
-		default: "box",
+		default: "band",
 		ui: {
 			tab: "appearance",
 			group: "Composer",
@@ -834,7 +841,7 @@ export const SETTINGS_SCHEMA = {
 	},
 	"statusLine.compactThinkingLevel": {
 		type: "boolean",
-		default: false,
+		default: true,
 		ui: {
 			tab: "appearance",
 			group: "Status Line",
@@ -1986,13 +1993,14 @@ export const SETTINGS_SCHEMA = {
 	// Input and startup
 	doubleEscapeAction: {
 		type: "enum",
-		values: ["branch", "tree", "none"] as const,
-		default: "tree",
+		values: ["rewind", "tree", "none"] as const,
+		default: "rewind",
 		ui: {
 			tab: "interaction",
 			group: "Input",
 			label: "Double-Escape Action",
-			description: "Action when pressing Escape twice with empty editor",
+			description:
+				"What pressing Escape twice with an empty editor does: open the transcript rewind selector, open the session tree, or nothing",
 		},
 	},
 
@@ -2474,7 +2482,7 @@ export const SETTINGS_SCHEMA = {
 	// compaction kicks in before any request crosses into premium billing.
 	extendedContext: {
 		type: "boolean",
-		default: true,
+		default: false,
 		ui: {
 			tab: "context",
 			group: "General",
@@ -2556,10 +2564,10 @@ export const SETTINGS_SCHEMA = {
 			description: "Fixed token limit for context maintenance; overrides percentage if set",
 			options: [
 				{ value: "default", label: "Default", description: "Use percentage-based threshold" },
-				{ value: "25000", label: "25K tokens", description: "Quarter of a 200K window" },
-				{ value: "50000", label: "50K tokens", description: "Half of a 200K window" },
-				{ value: "100000", label: "100K tokens", description: "Half of a 200K window" },
-				{ value: "150000", label: "150K tokens", description: "Three-quarters of a 200K window" },
+				{ value: "25000", label: "25K tokens", description: "1/8 of a 200K window" },
+				{ value: "50000", label: "50K tokens", description: "1/4 of a 200K window" },
+				{ value: "100000", label: "100K tokens", description: "1/2 of a 200K window" },
+				{ value: "150000", label: "150K tokens", description: "3/4 of a 200K window" },
 				{ value: "200000", label: "200K tokens", description: "Full standard context window" },
 				{ value: "300000", label: "300K tokens", description: "Large context window" },
 				{ value: "500000", label: "500K tokens", description: "Very large context window" },
@@ -2937,17 +2945,18 @@ export const SETTINGS_SCHEMA = {
 	"memories.summaryInjectionTokenLimit": { type: "number", default: 5000 },
 
 	// Memory backend selector — picks between local memories pipeline,
-	// Mnemopi local SQLite, Hindsight remote memory, or off. The legacy
+	// Mnemopi local SQLite, Hindsight remote memory, Sharpshooter project
+	// decisions, or off. The legacy
 	// `memories.enabled` flag is migration input only; see config/settings.ts.
 	"memory.backend": {
 		type: "enum",
-		values: ["off", "local", "hindsight", "mnemopi"] as const,
+		values: ["off", "local", "hindsight", "mnemopi", "sharpshooter"] as const,
 		default: "off",
 		ui: {
 			tab: "memory",
 			group: "General",
 			label: "Memory Backend",
-			description: "Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+			description: "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
 			options: [
 				{ value: "off", label: "Off", description: "No memory subsystem runs" },
 				{ value: "local", label: "Local", description: "Local rollout summarisation pipeline (memory_summary.md)" },
@@ -2957,9 +2966,27 @@ export const SETTINGS_SCHEMA = {
 					label: "Mnemopi",
 					description: "Local SQLite recall/retain backend with optional embeddings",
 				},
+				{
+					value: "sharpshooter",
+					label: "Sharpshooter",
+					description:
+						"Friction-gated project decision files (architecture/product/style), consolidated in the background",
+				},
 			],
 		},
 	},
+	"sharpshooter.model": {
+		type: "string",
+		default: undefined,
+		ui: {
+			tab: "memory",
+			group: "Sharpshooter",
+			label: "Sharpshooter Model",
+			description: "Model selector for extraction/consolidation, empty = smol role",
+		},
+	},
+	"sharpshooter.intervalMinutes": { type: "number", default: 5 },
+	"sharpshooter.injectionTokenLimit": { type: "number", default: 15000 },
 
 	// Auto-Learn (experimental): post-stop nudge to capture lessons to memory
 	// and mint/enhance isolated managed skills under ~/.omp/agent/managed-skills.
@@ -3544,6 +3571,17 @@ export const SETTINGS_SCHEMA = {
 			group: "Editing",
 			label: "Abort on Failed Preview",
 			description: "Abort streaming edit tool calls when patch preview fails",
+		},
+	},
+
+	"edit.recoverInlineEdits": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "files",
+			group: "Editing",
+			label: "Recover Inline Edit Payloads",
+			description: "Execute edit payloads the model emits as plain text by converting them into edit tool calls",
 		},
 	},
 
@@ -4808,29 +4846,27 @@ export const SETTINGS_SCHEMA = {
 	},
 
 	// Delegation
-	"task.isolation.mode": {
-		type: "enum",
-		values: [
-			"none",
-			"auto",
-			"apfs",
-			"btrfs",
-			"zfs",
-			"reflink",
-			"overlayfs",
-			"projfs",
-			"block-clone",
-			"rcopy",
-		] as const,
-		default: "none",
+	"task.isolation.enabled": {
+		type: "boolean",
+		default: false,
 		ui: {
 			tab: "tasks",
 			group: "Isolation",
-			label: "Isolation Mode",
-			description:
-				'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).',
+			label: "Isolate Subagents",
+			description: "Run subagents in an isolated copy of the checkout and integrate their changes afterwards",
+		},
+	},
+
+	"isolation.backend": {
+		type: "enum",
+		values: ["auto", "apfs", "btrfs", "zfs", "reflink", "overlayfs", "projfs", "block-clone", "rcopy"] as const,
+		default: "auto",
+		ui: {
+			tab: "tasks",
+			group: "Isolation",
+			label: "Isolation Backend",
+			description: "Backend used for subagent isolation and worktree cloning",
 			options: [
-				{ value: "none", label: "None", description: "No isolation" },
 				{ value: "auto", label: "Auto", description: "Let the PAL pick the best available backend" },
 				{ value: "apfs", label: "APFS", description: "macOS clonefile reflink (APFS)" },
 				{ value: "btrfs", label: "btrfs", description: "btrfs subvolume snapshot" },
@@ -4853,6 +4889,18 @@ export const SETTINGS_SCHEMA = {
 					description: "git worktree if available, otherwise recursive copy",
 				},
 			],
+		},
+	},
+
+	"worktree.clone": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tasks",
+			group: "Isolation",
+			label: "Clone Checkout into Worktrees",
+			description:
+				"New worktrees from `github pr_checkout` and `git worktree add` in bash start as a copy-on-write clone of the current checkout so ignored build artifacts (node_modules, target) carry over; falls back to a plain checkout when the filesystem cannot clone",
 		},
 	},
 
@@ -4922,7 +4970,11 @@ export const SETTINGS_SCHEMA = {
 			label: "Prefer Task Delegation",
 			description: "How strongly to push delegating work to subagents",
 			options: [
-				{ value: "default", label: "Default", description: "Model decides when to delegate" },
+				{
+					value: "default",
+					label: "Default",
+					description: "Uses the selected model's policy; some models require an explicit delegation request",
+				},
 				{ value: "preferred", label: "Preferred", description: "Adds delegation guidance to the system prompt" },
 				{ value: "always", label: "Always", description: "Prompt guidance plus a first-turn delegation reminder" },
 			],
@@ -5153,9 +5205,9 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	"skills.enableCodexUser": { type: "boolean", default: true },
+	"skills.enableCodexUser": { type: "boolean", default: false },
 
-	"skills.enableClaudeUser": { type: "boolean", default: true },
+	"skills.enableClaudeUser": { type: "boolean", default: false },
 
 	"skills.enableClaudeProject": { type: "boolean", default: true },
 
@@ -5176,7 +5228,7 @@ export const SETTINGS_SCHEMA = {
 	// Commands
 	"commands.enableClaudeUser": {
 		type: "boolean",
-		default: true,
+		default: false,
 		ui: {
 			tab: "tasks",
 			group: "Commands & Skills",
@@ -5198,7 +5250,7 @@ export const SETTINGS_SCHEMA = {
 
 	"commands.enableOpencodeUser": {
 		type: "boolean",
-		default: true,
+		default: false,
 		ui: {
 			tab: "tasks",
 			group: "Commands & Skills",
