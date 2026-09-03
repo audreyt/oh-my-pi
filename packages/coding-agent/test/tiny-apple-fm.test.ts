@@ -46,6 +46,7 @@ describe("afm-core title registry", () => {
 		} else {
 			expect(spec?.unsupportedReason).toBe("Apple Foundation Models is macOS-only");
 		}
+		expect(spec?.onnxUnsupportedReason).toBe("Apple Foundation Models uses the SystemLanguageModel engine, not ONNX");
 	});
 
 	it("lets OMP_APPLE_FM_SIDECAR bypass the platform gate", () => {

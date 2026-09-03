@@ -1,3 +1,4 @@
+import type { TinyTitleLocalModelSpec } from "./models";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils";
@@ -29,7 +30,7 @@ function sidecarOverride(): string | undefined {
 }
 
 /** Env override disables the platform gate so tests can drive a fake sidecar anywhere. */
-export function foundationModelsUnavailableReason(spec: { unsupportedReason?: string }): string | undefined {
+export function foundationModelsUnavailableReason(spec: TinyTitleLocalModelSpec): string | undefined {
 	if (sidecarOverride()) return undefined;
 	return spec.unsupportedReason;
 }

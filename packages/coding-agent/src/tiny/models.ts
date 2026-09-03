@@ -19,10 +19,10 @@ export interface TinyTitleLocalModelSpec {
 	contextNote: string;
 	/** Model family emits hidden reasoning unless the chat template disables it. */
 	reasoning?: boolean;
+	/** Darwin-only gate for non-weight engines; `undefined` when usable on this machine. */
+	unsupportedReason?: string;
 	/** Reason the ONNX backend refuses this model before loading the runtime; the MLX backend ignores it. */
 	onnxUnsupportedReason?: string;
-	/** Reason this model is unavailable on the current platform; checked before any backend loads. */
-	unsupportedReason?: string;
 }
 
 export const TINY_TITLE_LOCAL_MODELS = [
@@ -64,6 +64,7 @@ export const TINY_TITLE_LOCAL_MODELS = [
 		contextNote:
 			"Darwin only. Session context is SystemLanguageModel.contextSize (4096 on 26.x, live _contextSize on 27+; 8192 for AFM 3 on this class of Mac). Fail closed when Apple Intelligence is off or the model is not ready.",
 		unsupportedReason: process.platform === "darwin" ? undefined : "Apple Foundation Models is macOS-only",
+		onnxUnsupportedReason: "Apple Foundation Models uses the SystemLanguageModel engine, not ONNX",
 	},
 ] as const satisfies readonly TinyTitleLocalModelSpec[];
 
