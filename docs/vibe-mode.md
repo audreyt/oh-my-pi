@@ -1,6 +1,6 @@
 # Vibe mode
 
-Vibe mode turns the top-level interactive session into a **director** for persistent background worker sessions instead of letting it edit or execute commands itself. The director's active tools are reduced to `read`, UI-only `ask`, optional parent-owned `todo`, and five worker-control tools. Workers do the searching, editing, running, and building; the director verifies their claims by reading touched files. `ask` requests a decision from the user, while `todo` belongs only to the parent director.
+Vibe mode turns the top-level interactive session into a **director** for persistent background worker sessions instead of letting it edit or execute commands itself. The director's active tools are reduced to `read`, `ask` when built in and enabled in the parent session, optional parent-owned `todo`, and five worker-control tools. Workers do the searching, editing, running, and building; the director verifies their claims by reading touched files. `ask` requests a decision from the user, while `todo` belongs only to the parent director.
 
 ## Enabling and disabling
 
@@ -12,7 +12,7 @@ Toggle it with the `/vibe` slash command:
 /vibe                 # run again to exit
 ```
 
-- Entering activates a parent-session worker scope, installs the vibe tools, reduces the active toolset to `read`, available `ask` and parent-owned `todo`, and the vibe tools, and injects the director instructions.
+- Entering activates a parent-session worker scope, installs the vibe tools, reduces the active toolset to `read`, `ask` when built in and enabled on entry, and parent-owned `todo`, plus the vibe tools, and injects the director instructions.
 - An inline prompt (`/vibe <prompt>`) enters the mode and submits that prompt as the first directive.
 - Exiting restores the prior toolset, cancels in-flight worker turns, kills every worker session in the scope, and persists terminal lifecycle records. A worker never outlives an intentional mode exit.
 - Vibe mode is mutually exclusive with both active **and paused** plan/goal modes; exit those modes first.
