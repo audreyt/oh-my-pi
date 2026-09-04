@@ -11,6 +11,9 @@
 ### Changed
 
 - Adjusted subagent delegation for GPT-6 and newer OpenAI models to reduce unnecessary delegation.
+### Added
+
+- Added the Meta/Muse Image hosted image operation to the compat policy: a `meta-image` default of `muse-image-1.0` for the model-less `generate_image` tool.
 
 ### Fixed
 

@@ -14297,6 +14297,10 @@
 			{
 				"provider": "synthetic-search",
 				"model": "auto"
+			},
+			{
+				"provider": "meta-image",
+				"model": "muse-image-1.0"
 			}
 		],
 		"apiRoutes": [

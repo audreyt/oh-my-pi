@@ -4360,7 +4360,7 @@ export function coreWeaveModelManagerOptions(
 // 15.75 Meta Model API
 // ---------------------------------------------------------------------------
 
-const META_MODEL_API_BASE_URL = "https://api.meta.ai/v1";
+export const META_MODEL_API_BASE_URL = "https://api.meta.ai/v1";
 const META_MUSE_SPARK_COST = { input: 1.25, output: 4.25, cacheRead: 0.15, cacheWrite: 0 } as const;
 // Contributor SKUs (`-contributor`): same model, discounted because prompts
 // are used for training.

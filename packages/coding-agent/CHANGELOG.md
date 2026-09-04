@@ -5,6 +5,10 @@
 ### Added
 
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
+- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
+- Made Markdown links to existing local files and resources clickable while preserving their displayed URLs.
+- Added the `/switch <model>` command for session-only model changes from the prompt, with support for the same model selectors and completions used by `--model`; ACP `/model <model>` accepts these selectors as well.
+- Added the `worktree.cleanSource` setting to reset and clean the original checkout when creating a worktree with `/wt`.
 
 ### Fixed
 

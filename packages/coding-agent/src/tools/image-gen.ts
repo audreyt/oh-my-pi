@@ -20,6 +20,8 @@ import {
 	OPENAI_HEADERS,
 	URL_PATHS,
 } from "@oh-my-pi/pi-catalog/wire/codex";
+import { hostedDefaultModel } from "@oh-my-pi/pi-catalog/compat/behavior";
+import { META_MODEL_API_BASE_URL } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
 import {
 	$env,
@@ -647,6 +649,34 @@ async function findDeepInfraImageCredentials(
 	if (apiKey) return { provider: "deepinfra", apiKey };
 	return null;
 }
+async function findMetaImageCredentials(
+	modelRegistry?: ModelRegistry,
+	sessionId?: string,
+): Promise<ImageApiKey | null> {
+	if (modelRegistry) {
+		// AuthStorage.getApiKey already falls back to env keys, so this covers MODEL_API_KEY too.
+		const apiKey = await modelRegistry.getApiKeyForProvider("meta", sessionId);
+		if (apiKey) return { provider: "meta", apiKey: modelRegistry.resolver("meta", { sessionId }) };
+		return null;
+	}
+	const apiKey = getEnvApiKey("meta");
+	if (apiKey) return { provider: "meta", apiKey };
+	return null;
+}
+function resolveMetaImageModel(): string {
+	const defaultModel = hostedDefaultModel("meta-image");
+	if (defaultModel) return defaultModel;
+	throw new Error("Missing default model policy for Meta image generation");
+}
+
+function resolveMetaImageBaseUrl(modelRegistry?: ModelRegistry): string {
+	const providerBaseUrl = modelRegistry?.getProviderBaseUrl("meta");
+	if (providerBaseUrl) {
+		const normalized = providerBaseUrl.replace(/\/+$/, "");
+		if (normalized !== META_MODEL_API_BASE_URL) return normalized;
+	}
+	return ($env.META_BASE_URL || META_MODEL_API_BASE_URL).replace(/\/+$/, "");
+}
 
 async function findGeminiImageCredentials(
 	modelRegistry?: ModelRegistry,
@@ -735,6 +765,8 @@ function activeImageProvider(model: Model | undefined): Exclude<ImageProviderPre
 			return "openrouter";
 		case "deepinfra":
 			return "deepinfra";
+		case "meta":
+			return "meta";
 		case "google":
 			return "gemini";
 		default:
@@ -779,6 +811,8 @@ async function findImageApiKey(
 			return findOpenRouterImageCredentials(modelRegistry, sessionId);
 		case "deepinfra":
 			return findDeepInfraImageCredentials(modelRegistry, sessionId);
+		case "meta":
+			return findMetaImageCredentials(modelRegistry, sessionId);
 		case "gemini":
 			return findGeminiImageCredentials(modelRegistry, sessionId);
 	}
@@ -1268,7 +1302,9 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 										? DEFAULT_XAI_IMAGE_MODEL
 										: provider === "deepinfra"
 											? DEFAULT_DEEPINFRA_IMAGE_MODEL
-											: DEFAULT_MODEL;
+											: provider === "meta"
+												? resolveMetaImageModel()
+												: DEFAULT_MODEL;
 					const resolvedModel = provider === "openrouter" ? resolveOpenRouterModel(model) : model;
 					if (
 						params.aspect_ratio &&
@@ -1615,7 +1651,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 					if (provider === "deepinfra") {
 						// Text-to-image only: images/generations has no reference-image
 						// input, so an edit request falls through to an edit-capable
-						// provider (openai/openrouter/gemini) later in the order.
+						// provider (openai/openrouter/gemini/meta) later in the order.
 						if (resolvedImages.length > 0) {
 							editUnsupportedProvider ??= provider;
 							continue;
@@ -1634,6 +1670,38 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 						const rawText = await postImageEndpointRequest({
 							label: "DeepInfra",
 							url: DEEPINFRA_IMAGES_URL,
+							body: requestBody,
+							apiKey: apiKey.apiKey,
+							fetchImpl,
+							signal: requestSignal,
+						});
+						const inlineImages = await collectImageEndpointImages(rawText, fetchImpl, requestSignal);
+						return buildImageEndpointResult(provider, resolvedModel, inlineImages);
+					}
+					if (provider === "meta") {
+						const prompt = assemblePrompt(params);
+						const size = resolveOpenAIImageSize(params.aspect_ratio, params.image_size);
+						const isEdit = resolvedImages.length > 0;
+						const requestBody = isEdit
+							? {
+									model: resolvedModel,
+									prompt,
+									images: resolvedImages.map(image => ({ image_url: toDataUrl(image) })),
+									n: 1,
+									response_format: "b64_json" as const,
+									...(size ? { size } : {}),
+								}
+							: {
+									model: resolvedModel,
+									prompt,
+									n: 1,
+									response_format: "b64_json" as const,
+									...(size ? { size } : {}),
+								};
+
+						const rawText = await postImageEndpointRequest({
+							label: "Meta",
+							url: `${resolveMetaImageBaseUrl(ctx.modelRegistry)}${isEdit ? "/images/edits" : "/images/generations"}`,
 							body: requestBody,
 							apiKey: apiKey.apiKey,
 							fetchImpl,
@@ -1754,7 +1822,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 
 			if (!foundCredentials) {
 				throw new Error(
-					"No image API credentials found. Connect a Codex (ChatGPT) subscription, use a GPT Responses/Codex model with OpenAI credentials, log in with google-antigravity or xAI Grok OAuth, or set OPENAI_API_KEY, XAI_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY, or DEEPINFRA_API_KEY.",
+					"No image API credentials found. Connect a Codex (ChatGPT) subscription, use a GPT Responses/Codex model with OpenAI credentials, log in with google-antigravity or xAI Grok OAuth, or set OPENAI_API_KEY, XAI_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY, DEEPINFRA_API_KEY, MODEL_API_KEY, or META_API_KEY.",
 				);
 			}
 
@@ -1764,7 +1832,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 
 			if (failures.length === 0 && editUnsupportedProvider) {
 				throw new Error(
-					`${editUnsupportedProvider} image generation is text-to-image only and cannot edit input images. Configure an edit-capable provider (openai, openai-codex, antigravity, xai, openrouter, gemini) or retry without input images.`,
+					`${editUnsupportedProvider} image generation is text-to-image only and cannot edit input images. Configure an edit-capable provider (openai, openai-codex, antigravity, xai, openrouter, gemini, meta) or retry without input images.`,
 				);
 			}
 
