@@ -30,6 +30,8 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	// User-configured models.yml provider pointing at
 	// https://inference-api.nousresearch.com/v1 (NousResearch inference API).
 	"nous",
+	// Hosted image-generation default for Meta Model API (packages/coding-agent/src/tools/image-gen.ts)
+	"meta-image",
 ]);
 
 function collectReferencedProviders(): Map<string, string> {
