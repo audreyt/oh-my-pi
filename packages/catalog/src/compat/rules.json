@@ -6226,6 +6226,19 @@
 			{
 				"source": "classes/openai.kdl:36",
 				"class": "openai",
+				"models": [
+					{
+						"kind": "exact",
+						"value": "gpt-6-astra"
+					}
+				],
+				"wire": {
+					"supportsConfigurationUpdate": true
+				}
+			},
+			{
+				"source": "classes/openai.kdl:42",
+				"class": "openai",
 				"family": "codex",
 				"revision": [
 					{
@@ -10650,7 +10663,7 @@
 					},
 					{
 						"op": "<",
-						"revision": "6.0.0"
+						"revision": "7.0.0"
 					}
 				],
 				"catalog": {
@@ -10955,7 +10968,7 @@
 					},
 					{
 						"op": "<",
-						"revision": "6.0.0"
+						"revision": "7.0.0"
 					}
 				],
 				"catalog": {
@@ -14919,7 +14932,7 @@
 					"authorizeParams": {
 						"id_token_add_organizations": "true",
 						"codex_cli_simplified_flow": "true",
-						"originator": "pi"
+						"originator": "omp"
 					},
 					"clientId": {
 						"value": "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -14934,6 +14947,7 @@
 						"hostname": "localhost",
 						"portFallback": false,
 						"manualOnly": false,
+						"nativeScheme": false,
 						"redirectUri": {
 							"value": "http://localhost:1455/auth/callback"
 						}
@@ -15031,7 +15045,8 @@
 						"path": "/callback",
 						"hostname": "localhost",
 						"portFallback": true,
-						"manualOnly": false
+						"manualOnly": false,
+						"nativeScheme": false
 					},
 					"token": {
 						"url": {
@@ -15153,16 +15168,20 @@
 						]
 					},
 					"callback": {
-						"port": 9999,
+						"port": 0,
 						"path": "/callback",
-						"hostname": "127.0.0.1",
-						"portFallback": false,
-						"manualOnly": false,
+						"hostname": "localhost",
+						"portFallback": true,
+						"manualOnly": true,
+						"nativeScheme": true,
 						"redirectUri": {
-							"value": "http://127.0.0.1:9999/callback"
+							"value": "zcode://zai-auth/callback",
+							"env": [
+								"ZAI_OAUTH_REDIRECT_URI"
+							]
 						}
 					},
-					"instructions": "Complete Z.ai login in your browser. If the browser cannot reach this machine, paste the final redirect URL or authorization code when prompted.",
+					"instructions": "Complete Z.ai login in your browser. On supported local desktops, omp captures the zcode:// callback and restores its previous handler automatically. You can also paste the final redirect URL or authorization code when prompted.",
 					"token": {
 						"url": {
 							"value": "https://zcode.z.ai/api/v1/oauth/token",
@@ -15203,7 +15222,7 @@
 				"refresh": {
 					"kind": "none"
 				},
-				"callbackPort": 9999,
+				"callbackPort": 0,
 				"pasteCode": true
 			},
 			{
@@ -15330,7 +15349,8 @@
 						"path": "/callback",
 						"hostname": "localhost",
 						"portFallback": true,
-						"manualOnly": false
+						"manualOnly": false,
+						"nativeScheme": false
 					},
 					"token": {
 						"url": {
@@ -15417,7 +15437,8 @@
 						"path": "/callback",
 						"hostname": "127.0.0.1",
 						"portFallback": true,
-						"manualOnly": false
+						"manualOnly": false,
+						"nativeScheme": false
 					},
 					"token": {
 						"url": {
@@ -15497,7 +15518,8 @@
 						"path": "/oauth-callback",
 						"hostname": "127.0.0.1",
 						"portFallback": true,
-						"manualOnly": false
+						"manualOnly": false,
+						"nativeScheme": false
 					},
 					"token": {
 						"url": {
@@ -15595,7 +15617,8 @@
 						"path": "/oauth2callback",
 						"hostname": "127.0.0.1",
 						"portFallback": true,
-						"manualOnly": false
+						"manualOnly": false,
+						"nativeScheme": false
 					},
 					"token": {
 						"url": {
@@ -15861,6 +15884,7 @@
 						"hostname": "localhost",
 						"portFallback": true,
 						"manualOnly": false,
+						"nativeScheme": false,
 						"redirectUri": {
 							"env": [
 								"GITLAB_REDIRECT_URI"
@@ -15955,6 +15979,7 @@
 						"hostname": "localhost",
 						"portFallback": true,
 						"manualOnly": true,
+						"nativeScheme": false,
 						"redirectUri": {
 							"value": "vscode://gitlab.gitlab-workflow/authentication"
 						}
