@@ -1096,4 +1096,101 @@ describe("imageGenTool", () => {
 
 		expect(requestUrl).toBe("https://custom-proxy.meta.internal/v1/images/generations");
 	});
+
+	it("prefers META_BASE_URL when the registry reports the default Meta base URL", async () => {
+		const originalMetaBaseUrl = Bun.env.META_BASE_URL;
+		Bun.env.META_BASE_URL = "https://env-proxy.meta.internal/v1/";
+		try {
+			let requestUrl: string | undefined;
+
+			const fetchMock: typeof fetch = (async (input: string | URL | Request) => {
+				requestUrl = input.toString();
+				return new Response(
+					JSON.stringify({ data: [{ b64_json: Buffer.from("fake-meta-image").toString("base64"), url: null }] }),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				);
+			}) as unknown as typeof fetch;
+
+			const ctx: CustomToolContext = {
+				fetch: fetchMock,
+				sessionManager: {
+					getCwd: () => "/tmp",
+					getSessionId: () => "test-session",
+				} as unknown as ReadonlySessionManager,
+				modelRegistry: {
+					getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
+					getProviderBaseUrl: (provider: string) => (provider === "meta" ? "https://api.meta.ai/v1" : undefined),
+					getProviderHeaders: () => undefined,
+					getAll: () => [],
+					authStorage: { rotateSessionCredential: async () => false },
+					resolver: () => async () => "test-meta-key",
+				} as unknown as ModelRegistry,
+				model: undefined,
+				isIdle: () => true,
+				hasQueuedMessages: () => false,
+				abort: () => {},
+			};
+
+			const result = await imageGenTool.execute(
+				"call-meta-env-proxy",
+				{ subject: "a cat", provider: "meta" },
+				undefined,
+				ctx,
+			);
+			generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+			expect(requestUrl).toBe("https://env-proxy.meta.internal/v1/images/generations");
+		} finally {
+			if (originalMetaBaseUrl === undefined) {
+				delete Bun.env.META_BASE_URL;
+			} else {
+				Bun.env.META_BASE_URL = originalMetaBaseUrl;
+			}
+		}
+	});
+
+	it("forwards configured Meta provider headers to the image endpoint", async () => {
+		let requestHeaders: Headers | undefined;
+
+		const fetchMock: typeof fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+			requestHeaders = new Headers(init?.headers);
+			return new Response(
+				JSON.stringify({ data: [{ b64_json: Buffer.from("fake-meta-image").toString("base64"), url: null }] }),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}) as unknown as typeof fetch;
+
+		const ctx: CustomToolContext = {
+			fetch: fetchMock,
+			sessionManager: {
+				getCwd: () => "/tmp",
+				getSessionId: () => "test-session",
+			} as unknown as ReadonlySessionManager,
+			modelRegistry: {
+				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
+				getProviderBaseUrl: () => undefined,
+				getProviderHeaders: (provider: string) =>
+					provider === "meta" ? { "x-proxy-token": "proxy-123" } : undefined,
+				getAll: () => [],
+				authStorage: { rotateSessionCredential: async () => false },
+				resolver: () => async () => "test-meta-key",
+			} as unknown as ModelRegistry,
+			model: undefined,
+			isIdle: () => true,
+			hasQueuedMessages: () => false,
+			abort: () => {},
+		};
+
+		const result = await imageGenTool.execute(
+			"call-meta-headers",
+			{ subject: "a cat", provider: "meta" },
+			undefined,
+			ctx,
+		);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestHeaders?.get("x-proxy-token")).toBe("proxy-123");
+		expect(requestHeaders?.get("authorization")?.startsWith("Bearer ")).toBe(true);
+		expect(result.details?.provider).toBe("meta");
+	});
 });

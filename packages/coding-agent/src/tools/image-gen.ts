@@ -465,6 +465,7 @@ async function postImageEndpointRequest(options: {
 	apiKey: ApiKey;
 	fetchImpl: FetchImpl;
 	signal: AbortSignal | undefined;
+	headers?: Record<string, string>;
 }): Promise<string> {
 	return withAuth(
 		options.apiKey,
@@ -472,6 +473,7 @@ async function postImageEndpointRequest(options: {
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
 				headers: {
+					...options.headers,
 					Authorization: `Bearer ${key}`,
 					"Content-Type": "application/json",
 					"User-Agent": USER_AGENT,
@@ -1704,6 +1706,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							url: `${resolveMetaImageBaseUrl(ctx.modelRegistry)}${isEdit ? "/images/edits" : "/images/generations"}`,
 							body: requestBody,
 							apiKey: apiKey.apiKey,
+							headers: ctx.modelRegistry?.getProviderHeaders?.("meta"),
 							fetchImpl,
 							signal: requestSignal,
 						});

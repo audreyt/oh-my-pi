@@ -47,7 +47,7 @@ The custom tool is registered only when `generate_image.enabled=true` (default `
    - xAI: Grok Imagine generation or edit endpoint.
    - Gemini: Gemini `generateContent` with `responseModalities: ["IMAGE"]`.
    - DeepInfra: OpenAI-compatible `images/generations` endpoint (default model `black-forest-labs/FLUX-2-pro`, `DEEPINFRA_API_KEY` accepted). Text-to-image only — edit requests fall through to a later edit-capable provider.
-   - Meta: OpenAI-compatible `images/generations` and `images/edits` endpoints (default model `muse-image-1.0`, `MODEL_API_KEY` or `META_API_KEY` accepted). Supports text-to-image and reference-image editing.
+   - Meta: OpenAI-compatible `images/generations` and `images/edits` endpoints (default model `muse-image-1.0`, `MODEL_API_KEY` or `META_API_KEY` accepted). Supports text-to-image and reference-image editing. Base URL precedence: `providers.meta.baseUrl` when set to a non-default value, then `META_BASE_URL`, then the bundled default (`https://api.meta.ai/v1`). Configured `providers.meta` headers are forwarded with the request.
 7. Inline images in a successful provider response are saved to temporary files; paths and base64/MIME image metadata are returned. A response with no image data returns a normal zero-image result rather than `isError`.
 
 ## Modes / Variants
