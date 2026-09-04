@@ -8,6 +8,7 @@ import {
 	TINY_LOCAL_MODELS,
 	type TinyLocalModelKey,
 } from "../tiny/models";
+import { foundationModelsUnavailableReason } from "../tiny/apple-fm";
 import { shutdownTinyTitleClient, tinyTitleClient, tinyWorkerUsesMlx } from "../tiny/title-client";
 import type { TinyTitleProgressEvent } from "../tiny/title-protocol";
 
@@ -58,7 +59,8 @@ export function resolveModels(model: string | undefined, mlx = tinyWorkerUsesMlx
 	if (model === "all")
 		return TINY_LOCAL_MODELS.filter(
 			spec =>
-				(mlx || !("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason) && !isFoundationModelsSpec(spec),
+				(mlx || !("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason) &&
+				(!isFoundationModelsSpec(spec) || !foundationModelsUnavailableReason(spec)),
 		).map(spec => spec.key);
 	if (!isTinyLocalModelKey(model)) {
 		const values = TINY_LOCAL_MODELS.map(spec => spec.key).join(", ");

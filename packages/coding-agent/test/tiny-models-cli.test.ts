@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, spyOn, vi } from "bun:test";
 import { resolveModels, runTinyModelsCommand } from "@oh-my-pi/pi-coding-agent/cli/tiny-models-cli";
-import { isFoundationModelsSpec, TINY_LOCAL_MODELS } from "@oh-my-pi/pi-coding-agent/tiny/models";
+import { foundationModelsUnavailableReason } from "@oh-my-pi/pi-coding-agent/tiny/apple-fm";
+import {
+	getTinyLocalModelSpec,
+	isFoundationModelsSpec,
+	TINY_LOCAL_MODELS,
+} from "@oh-my-pi/pi-coding-agent/tiny/models";
 import { tinyTitleClient } from "@oh-my-pi/pi-coding-agent/tiny/title-client";
 
 afterEach(() => {
@@ -19,16 +24,31 @@ describe("tiny-models download model resolution", () => {
 		for (const key of unsupported) expect(all).not.toContain(key);
 
 		const usable = TINY_LOCAL_MODELS.filter(
-			spec => (!("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason) && !isFoundationModelsSpec(spec),
+			spec =>
+				(!("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason) &&
+				(!isFoundationModelsSpec(spec) || !foundationModelsUnavailableReason(spec)),
 		).map(spec => spec.key);
 		for (const key of usable) expect(all).toContain(key);
 	});
 
 	it("includes ONNX-blocked models in `all` when the MLX backend is active", () => {
-		// `foundation-models` (AFM) stays excluded: its download is a readiness
-		// probe, not a weight fetch, so bulk prefetch skips it on every backend.
-		const expected = TINY_LOCAL_MODELS.filter(spec => !isFoundationModelsSpec(spec)).map(spec => spec.key);
+		// `foundation-models` (AFM) joins the prefetch only when usable here
+		// (Darwin-ready or sidecar override); elsewhere it stays excluded.
+		const expected = TINY_LOCAL_MODELS.filter(
+			spec => !isFoundationModelsSpec(spec) || !foundationModelsUnavailableReason(spec),
+		).map(spec => spec.key);
 		expect(resolveModels("all", true)).toEqual(expected);
+	});
+
+	it("includes afm-core in `all` exactly when Foundation Models is usable here", () => {
+		const spec = getTinyLocalModelSpec("afm-core");
+		expect(spec).toBeDefined();
+		if (!spec) return;
+		if (foundationModelsUnavailableReason(spec)) {
+			expect(resolveModels("all", false)).not.toContain("afm-core");
+		} else {
+			expect(resolveModels("all", false)).toContain("afm-core");
+		}
 	});
 
 	it("still resolves an explicitly requested unsupported model (only `all` is filtered)", () => {

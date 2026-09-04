@@ -59,8 +59,15 @@ describe("afm-core title registry", () => {
 		expect(foundationModelsUnavailableReason(spec)).toBeUndefined();
 	});
 
-	it("keeps afm-core out of download all even when Darwin-ready", () => {
-		expect(resolveModels("all")).not.toContain("afm-core");
+	it("includes afm-core in download all exactly when Darwin-ready", () => {
+		const spec = getTinyLocalModelSpec("afm-core");
+		expect(spec).toBeDefined();
+		if (!spec) return;
+		if (foundationModelsUnavailableReason(spec)) {
+			expect(resolveModels("all")).not.toContain("afm-core");
+		} else {
+			expect(resolveModels("all")).toContain("afm-core");
+		}
 		expect(resolveModels("afm-core")).toEqual(["afm-core"]);
 	});
 
