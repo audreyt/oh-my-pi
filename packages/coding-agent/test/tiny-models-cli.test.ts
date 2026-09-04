@@ -8,27 +8,34 @@ afterEach(() => {
 });
 
 describe("tiny-models download model resolution", () => {
-	it("excludes load-blocked models from `all` so the bulk prefetch stays green", () => {
-		const unsupported = TINY_LOCAL_MODELS.filter(spec => "unsupportedReason" in spec && spec.unsupportedReason).map(
-			spec => spec.key,
-		);
+	it("excludes ONNX-blocked models from `all` so the bulk prefetch stays green", () => {
+		const unsupported = TINY_LOCAL_MODELS.filter(
+			spec => "onnxUnsupportedReason" in spec && spec.onnxUnsupportedReason,
+		).map(spec => spec.key);
 		// Guard: keep this regression meaningful — at least one registry entry must be load-blocked.
 		expect(unsupported.length).toBeGreaterThan(0);
 
-		const all = resolveModels("all");
+		const all = resolveModels("all", false);
 		for (const key of unsupported) expect(all).not.toContain(key);
 
 		const usable = TINY_LOCAL_MODELS.filter(
-			spec => !("unsupportedReason" in spec && spec.unsupportedReason) && !isFoundationModelsSpec(spec),
+			spec => (!("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason) && !isFoundationModelsSpec(spec),
 		).map(spec => spec.key);
 		for (const key of usable) expect(all).toContain(key);
 	});
 
+	it("includes ONNX-blocked models in `all` when the MLX backend is active", () => {
+		// `foundation-models` (AFM) stays excluded: its download is a readiness
+		// probe, not a weight fetch, so bulk prefetch skips it on every backend.
+		const expected = TINY_LOCAL_MODELS.filter(spec => !isFoundationModelsSpec(spec)).map(spec => spec.key);
+		expect(resolveModels("all", true)).toEqual(expected);
+	});
+
 	it("still resolves an explicitly requested unsupported model (only `all` is filtered)", () => {
-		const blocked = TINY_LOCAL_MODELS.find(spec => "unsupportedReason" in spec && spec.unsupportedReason);
+		const blocked = TINY_LOCAL_MODELS.find(spec => "onnxUnsupportedReason" in spec && spec.onnxUnsupportedReason);
 		expect(blocked).toBeDefined();
 		if (!blocked) return;
-		expect(resolveModels(blocked.key)).toEqual([blocked.key]);
+		expect(resolveModels(blocked.key, false)).toEqual([blocked.key]);
 	});
 
 	it("includes worker error details in JSON failures", async () => {
