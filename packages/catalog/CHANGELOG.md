@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `max` thinking-effort tier to Muse Spark 1.3 and its contributor variant.
+
 ## [18.1.9] - 2026-09-04
 
 ### Added
