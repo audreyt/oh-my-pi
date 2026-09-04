@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Fixed `omp update` targeting whichever install PATH finds first instead of the install it was run from, so a bun/npm-managed copy shadowed by a standalone binary (or vice versa) now updates itself; a PATH launcher belonging to a different install is reported and left untouched.
 - Fixed fallback authorization-code prompts remaining active after native OAuth callback completion.
 - Fixed a rare issue where reciprocal idle subagents could continue waking one another indefinitely.
 - Fixed `/wt` and `git worktree add` failing when the new worktree targeted the same commit as the clean source checkout.

@@ -636,6 +636,16 @@ function resolveUpdateMethod(
 	) {
 		return "bun";
 	}
+	// The running entry script of a bun-managed install lives directly in
+	// bun's global node_modules tree rather than its bin dir, so bin-dir
+	// containment alone would misroute it to a binary update — which would
+	// overwrite the entry script with a native executable. The standalone
+	// regular-file override does not apply here: package entry scripts are
+	// regular files, and a native binary is never placed inside the global
+	// node_modules tree by any installer this updater handles.
+	if (allowPackageManagers && bunNodeModulesDir && isPathInDirectory(ompPath, bunNodeModulesDir)) {
+		return "bun";
+	}
 	const npmNodeModulesDir = resolveNpmGlobalNodeModulesDir(npmBinDir);
 	if (
 		allowPackageManagers &&
@@ -644,6 +654,9 @@ function resolveUpdateMethod(
 		!isStandaloneRegularFile &&
 		isManagerOwnedBinEntry(ompLinkTarget, npmNodeModulesDir)
 	) {
+		return "npm";
+	}
+	if (allowPackageManagers && npmNodeModulesDir && isPathInDirectory(ompPath, npmNodeModulesDir)) {
 		return "npm";
 	}
 	if (isWindowsScriptLauncher) return "npm";
@@ -714,46 +727,213 @@ export function resolveUpdateTargetFromPath(
 	return { method };
 }
 /**
+/**
+ * Entry-script extensions. A standalone release binary never carries one, so
+ * a candidate path with one of these is a script launch (a bun/npm-managed
+ * install, a `bunx` cache entry, or a local checkout) — never a
+ * binary-update target.
+ */
+const SCRIPT_ENTRY_EXTENSIONS: ReadonlySet<string> = new Set([".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"]);
+
+function isScriptEntryPath(entryPath: string): boolean {
+	return SCRIPT_ENTRY_EXTENSIONS.has(path.extname(entryPath).toLowerCase());
+}
+
+/** Basenames of JS runtimes: only when the process image is one of these does `argv[1]` name the entry script. */
+const JS_RUNTIME_BASENAMES: ReadonlySet<string> = new Set(["bun", "bun.exe", "node", "node.exe"]);
+
+export interface RunningEntryOverrides {
+	bunMain?: unknown;
+	argv1?: unknown;
+	execPath?: string;
+}
+
+/**
+ * Absolute path of the running omp entry, or undefined when it cannot be
+ * determined safely.
+ *
+ * A compiled binary reports itself via `Bun.main`, as does `bun <script>`
+ * (the script path). Under `node <script>` there is no `Bun.main`, and
+ * `argv[1]` names the entry only because the process image is the runtime
+ * itself — in a compiled binary `argv[1]` is the first user argument and must
+ * never be treated as an install path, so it is consulted only on a runtime
+ * image. TypeScript source runs (local development) resolve to undefined so
+ * target selection keeps using the PATH launcher, exactly as before.
+ */
+export function resolveRunningEntryPath(overrides: RunningEntryOverrides = {}): string | undefined {
+	// Presence (not nullishness) selects the source, so tests can force the
+	// no-Bun branch even though the real `Bun.main` is a string under `bun test`.
+	const bunMain = "bunMain" in overrides ? overrides.bunMain : typeof Bun !== "undefined" ? Bun.main : undefined;
+	let raw: string;
+	if (typeof bunMain === "string" && bunMain.length > 0) {
+		raw = bunMain;
+	} else {
+		const execPath =
+			"execPath" in overrides && overrides.execPath !== undefined ? overrides.execPath : process.execPath;
+		const argv1 = "argv1" in overrides ? overrides.argv1 : process.argv[1];
+		if (!JS_RUNTIME_BASENAMES.has(path.basename(execPath).toLowerCase())) return undefined;
+		if (typeof argv1 !== "string" || argv1.length === 0) return undefined;
+		raw = argv1;
+	}
+	const resolved = path.isAbsolute(raw) ? raw : path.resolve(raw);
+	const ext = path.extname(resolved).toLowerCase();
+	if (ext === ".ts" || ext === ".mts" || ext === ".cts") return undefined;
+	return resolved;
+}
+
+export interface CandidateUpdateTargetResolution {
+	target: UpdateTarget;
+	/** The PATH-resolved launcher, when one exists. */
+	pathLauncher?: string;
+	/**
+	 * Whether the target belongs to the same install as the PATH launcher.
+	 * False means the PATH launcher is a different install (or is missing
+	 * while the target is known): callers must verify the target directly and
+	 * must never repair or replace the PATH launcher.
+	 */
+	sameInstall: boolean;
+}
+
+function installsMatchTarget(
+	target: UpdateTarget,
+	pathLauncher: string,
+	dirs: { bunBinDir?: string; bunGlobalDir?: string; npmBinDir?: string },
+): boolean {
+	if (target.method !== "bun" && target.method !== "npm" && target.method !== "binary") return true;
+	if (!target.path) return true;
+	const targetResolved = path.resolve(target.path);
+	const launcherResolved = path.resolve(pathLauncher);
+	if (normalizePathForComparison(targetResolved) === normalizePathForComparison(launcherResolved)) return true;
+	const targetReal = tryRealpath(targetResolved);
+	const launcherReal = tryRealpath(launcherResolved);
+	if (targetReal && launcherReal) {
+		if (normalizePathForComparison(targetReal) === normalizePathForComparison(launcherReal)) return true;
+	} else {
+		return false;
+	}
+	// A manager install launched through its shim reports the entry script as
+	// the running path while PATH resolves to the shim (notably npm/bun on
+	// Windows, where shims are regular files rather than symlinks). The script
+	// lives in the manager's global node_modules tree and the shim in its bin
+	// dir, which identifies the pair as one install.
+	if (!isScriptEntryPath(target.path)) return false;
+	const bunNodeModulesDir = resolveBunGlobalNodeModulesDirFromLocations({
+		globalDir: dirs.bunGlobalDir,
+		globalBinDir: dirs.bunBinDir,
+	});
+	const npmNodeModulesDir = resolveNpmGlobalNodeModulesDir(dirs.npmBinDir);
+	return (
+		(!!bunNodeModulesDir &&
+			!!dirs.bunBinDir &&
+			isPathInDirectory(target.path, bunNodeModulesDir) &&
+			isPathInDirectory(pathLauncher, dirs.bunBinDir)) ||
+		(!!npmNodeModulesDir &&
+			!!dirs.npmBinDir &&
+			isPathInDirectory(target.path, npmNodeModulesDir) &&
+			isPathInDirectory(pathLauncher, dirs.npmBinDir))
+	);
+}
+
+/**
+ * Select the update target from ordered candidates (the running entry first,
+ * the PATH launcher second).
+ *
+ * A candidate that classifies as a binary update but is a script entry only
+ * means no manager recognized it (a `bunx` cache entry, a local checkout), so
+ * it is skipped in favor of the next candidate rather than overwritten with a
+ * native executable. When no candidate is usable the legacy fallback applies:
+ * a resolvable bun bin dir, else an error naming PATH.
+ */
+export function resolveUpdateTargetFromCandidates(
+	candidates: readonly (string | undefined)[],
+	bunBinDir: string | undefined,
+	options: Omit<UpdateMethodResolutionOptions, "allowPackageManagers"> & {
+		allowPackageManagers: boolean;
+		pathLauncher?: string;
+	},
+): CandidateUpdateTargetResolution {
+	const { pathLauncher, ...methodOptions } = options;
+	const seen = new Set<string>();
+	for (const candidate of candidates) {
+		if (!candidate) continue;
+		const key = normalizePathForComparison(path.resolve(candidate));
+		if (seen.has(key)) continue;
+		seen.add(key);
+		const target = resolveUpdateTargetFromPath(candidate, bunBinDir, methodOptions);
+		if (target.method === "binary" && isScriptEntryPath(candidate)) continue;
+		const targetPath = "path" in target ? target.path : undefined;
+		return {
+			target,
+			pathLauncher,
+			sameInstall:
+				!targetPath || !pathLauncher
+					? targetPath === undefined
+					: installsMatchTarget(target, pathLauncher, {
+							bunBinDir,
+							bunGlobalDir: methodOptions.bunGlobalDir,
+							npmBinDir: methodOptions.npmBinDir,
+						}),
+		};
+	}
+
+	if (bunBinDir) return { target: { method: "bun" }, pathLauncher, sameInstall: true };
+
+	throw new Error(`Could not resolve ${APP_NAME} binary path in PATH`);
+}
+
+/**
  * Resolve how the running install should be updated.
+ *
+ * The running entry (the binary or script this process started from) is the
+ * primary candidate; the PATH launcher is the fallback. On a machine with a
+ * single install both name the same files and behavior is unchanged, but when
+ * several installs coexist (e.g. a standalone binary ahead of a bun-managed
+ * copy on PATH) the update now applies to the install that was invoked
+ * instead of whichever PATH happens to find first.
  *
  * `allowPackageManagers: false` disables bun/npm routing — used for
  * binary-only releases, where reinstalling through a package manager is never
  * valid. The `bun pm bin -g` / `npm prefix -g` probes are then skipped unless
- * the launcher is a symlink, whose bin dirs distinguish a manager launcher
- * (taken over in place) from a foreign symlink (resolved to its real binary).
- * Homebrew/mise detection always runs: both managers install GitHub release
- * binaries and stay valid regardless of how the release is distributed.
+ * a candidate is a symlink or a script entry, whose bin dirs distinguish a
+ * manager launcher (taken over in place) from a foreign entry. Homebrew/mise
+ * detection always runs: both managers install GitHub release binaries and
+ * stay valid regardless of how the release is distributed.
  */
-async function resolveUpdateTarget(options: { allowPackageManagers: boolean }): Promise<UpdateTarget> {
+async function resolveUpdateTarget(options: {
+	allowPackageManagers: boolean;
+}): Promise<CandidateUpdateTargetResolution> {
 	const homebrewPrefix = await getHomebrewFormulaPrefix();
 	const miseAvailable = $which("mise") !== undefined;
 	const miseBinDirs = miseAvailable ? await getMiseBinDirs() : [];
 	const miseDataDir = miseAvailable ? getMiseDataDir() : undefined;
-	const ompPath = resolveOmpPath();
+	const runningEntry = resolveRunningEntryPath();
+	const pathLauncher = resolveOmpPath();
 
 	// Binary-only releases skip package-manager routing, but a symlinked
 	// launcher still needs the manager bin dirs to tell a bun/npm launcher
 	// (taken over in place) from a foreign symlink (resolved to its real
-	// binary). A plain-file install never needs the distinction, so the common
-	// case stays probe-free.
-	const probeManagers = options.allowPackageManagers || (ompPath !== undefined && isSymlinkPath(ompPath));
+	// binary). A script entry needs them for the same reason: only the global
+	// node_modules trees tell a manager entry script from a foreign script. A
+	// plain-file install never needs the distinction, so the common case stays
+	// probe-free.
+	const candidates = [runningEntry, pathLauncher];
+	const probeManagers =
+		options.allowPackageManagers ||
+		candidates.some(
+			candidate => candidate !== undefined && (isSymlinkPath(candidate) || isScriptEntryPath(candidate)),
+		);
 	const bunBinDir = probeManagers ? await getBunGlobalBinDir() : undefined;
 	const npmBinDir = probeManagers ? await getNpmGlobalBinDir() : undefined;
 
-	if (ompPath) {
-		return resolveUpdateTargetFromPath(ompPath, bunBinDir, {
-			allowPackageManagers: options.allowPackageManagers,
-			bunGlobalDir: probeManagers ? process.env.BUN_INSTALL_GLOBAL_DIR : undefined,
-			homebrewPrefix,
-			miseBinDirs,
-			miseDataDir,
-			npmBinDir,
-		});
-	}
-
-	if (bunBinDir) return { method: "bun" };
-
-	throw new Error(`Could not resolve ${APP_NAME} binary path in PATH`);
+	return resolveUpdateTargetFromCandidates(candidates, bunBinDir, {
+		allowPackageManagers: options.allowPackageManagers,
+		bunGlobalDir: probeManagers ? process.env.BUN_INSTALL_GLOBAL_DIR : undefined,
+		homebrewPrefix,
+		miseBinDirs,
+		miseDataDir,
+		npmBinDir,
+		pathLauncher,
+	});
 }
 
 /** Bound on `omp.rename` hops so a broken pointer chain cannot loop forever. */
@@ -1431,12 +1611,16 @@ export interface RenameMigrationSteps {
 	install(): Promise<number>;
 	/** Remove the old-name globals. */
 	removeOld(): Promise<number>;
-	/** Check the PATH-resolved `omp` against the expected version. */
+	/** Check the updated install against the expected version. */
 	verify(): Promise<InstalledVersionVerification>;
 }
 
-/** Production {@link RenameMigrationSteps}: bun/npm global installs plus PATH verification. */
-function packageManagerMigrationSteps(manager: "bun" | "npm", release: ReleaseInfo): RenameMigrationSteps {
+/** Production {@link RenameMigrationSteps}: bun/npm global installs plus install verification. */
+function packageManagerMigrationSteps(
+	manager: "bun" | "npm",
+	release: ReleaseInfo,
+	verifyInstall: (version: string) => Promise<InstalledVersionVerification> = verifyInstalledVersion,
+): RenameMigrationSteps {
 	const nativeTag = currentNativeTag();
 	return {
 		async install() {
@@ -1461,7 +1645,7 @@ function packageManagerMigrationSteps(manager: "bun" | "npm", release: ReleaseIn
 			}
 			return agentExit;
 		},
-		verify: () => verifyInstalledVersion(release.version),
+		verify: () => verifyInstall(release.version),
 	};
 }
 
@@ -1473,7 +1657,7 @@ function packageManagerMigrationSteps(manager: "bun" | "npm", release: ReleaseIn
  *    failure here leaves the old install fully functional.
  * 2. Remove the old-name globals. Failure is non-fatal: a stale package
  *    wastes disk, but the bin already points at the new install.
- * 3. Verify the PATH-resolved `omp`. If the removal deleted the shared bin
+ * 3. Verify the updated install. If the removal deleted the shared bin
  *    link (manager-dependent), re-run the idempotent install to restore it
  *    and verify again; only a repeated failure aborts, with a recovery hint.
  */
@@ -1510,22 +1694,27 @@ export async function migrateRenamedInstall(release: ReleaseInfo, steps: RenameM
 /**
  * Update via package manager.
  *
- * Returns the PATH-resolved launcher check so the caller can repair a launcher
- * the manager left unusable, or `undefined` when a rename migration already
- * verified and reported its own result.
+ * Returns the updated-install check so the caller can repair a launcher the
+ * manager left unusable, or `undefined` when a rename migration already
+ * verified and reported its own result. `verifyInstall` selects which install
+ * is checked: the PATH-resolved launcher by default, or the updated install
+ * itself when it is not on PATH.
  */
-async function updateViaBun(release: ReleaseInfo): Promise<InstalledVersionVerification | undefined> {
+async function updateViaBun(
+	release: ReleaseInfo,
+	verifyInstall: (version: string) => Promise<InstalledVersionVerification> = verifyInstalledVersion,
+): Promise<InstalledVersionVerification | undefined> {
 	console.log(chalk.dim("Updating via bun..."));
 	let verification: InstalledVersionVerification | undefined;
 	if (release.packages.pkg !== PACKAGE) {
-		await migrateRenamedInstall(release, packageManagerMigrationSteps("bun", release));
+		await migrateRenamedInstall(release, packageManagerMigrationSteps("bun", release, verifyInstall));
 	} else {
 		const args = buildBunInstallArgs(release.version, currentNativeTag(), release.packages);
 		const result = await $`bun ${args}`.nothrow();
 		if (result.exitCode !== 0) {
 			throw new Error(`bun install failed with exit code ${result.exitCode}`);
 		}
-		verification = await verifyInstalledVersion(release.version);
+		verification = await verifyInstall(release.version);
 	}
 	try {
 		const pruneResult = await pruneBunCacheAfterGlobalInstall();
@@ -1538,10 +1727,13 @@ async function updateViaBun(release: ReleaseInfo): Promise<InstalledVersionVerif
 	return verification;
 }
 
-async function updateViaNpm(release: ReleaseInfo): Promise<InstalledVersionVerification | undefined> {
+async function updateViaNpm(
+	release: ReleaseInfo,
+	verifyInstall: (version: string) => Promise<InstalledVersionVerification> = verifyInstalledVersion,
+): Promise<InstalledVersionVerification | undefined> {
 	console.log(chalk.dim("Updating via npm..."));
 	if (release.packages.pkg !== PACKAGE) {
-		await migrateRenamedInstall(release, packageManagerMigrationSteps("npm", release));
+		await migrateRenamedInstall(release, packageManagerMigrationSteps("npm", release, verifyInstall));
 		return undefined;
 	}
 	const args = buildNpmInstallArgs(release.version, currentNativeTag(), release.packages);
@@ -1550,22 +1742,40 @@ async function updateViaNpm(release: ReleaseInfo): Promise<InstalledVersionVerif
 		throw new Error(`npm install failed with exit code ${result.exitCode}`);
 	}
 
-	return await verifyInstalledVersion(release.version);
+	return await verifyInstall(release.version);
 }
 /** Injectable steps for {@link updateViaManager}; mirrors {@link RenameMigrationSteps}. */
 export interface ManagerUpdateSteps {
 	/** Manager name used in progress and recovery messages. */
 	manager: string;
 	/**
-	 * Run the manager's global install. Resolves to the PATH-resolved launcher
+	 * Run the manager's global install. Resolves to the updated-install
 	 * check, or `undefined` when a rename migration already verified and
 	 * reported its own result.
 	 */
 	install(): Promise<InstalledVersionVerification | undefined>;
-	/** Re-check the PATH-resolved launcher after the install threw. */
+	/** Re-check the updated install after the install threw. */
 	verify(): Promise<InstalledVersionVerification>;
 	/** Take `launcherPath` over with the standalone release binary. */
 	repair(launcherPath: string): Promise<void>;
+	/**
+	 * False when the install being updated is not the PATH-resolved launcher
+	 * (a different install provides `omp` on PATH, or none does). Takeover
+	 * repair is then disabled: a stale or missing PATH entry belongs to
+	 * another install and must be left untouched. Defaults to true, which
+	 * preserves the single-install repair behavior.
+	 */
+	allowPathLauncherTakeover?: boolean;
+}
+
+export interface PackageManagerUpdateStepOptions {
+	/**
+	 * Check the updated install itself instead of the PATH-resolved launcher.
+	 * Used when the updated install is not on PATH.
+	 */
+	verifyInstall?: (version: string) => Promise<InstalledVersionVerification>;
+	/** Forwarded to {@link ManagerUpdateSteps.allowPathLauncherTakeover}. */
+	allowPathLauncherTakeover?: boolean;
 }
 
 /** Production {@link ManagerUpdateSteps}: a bun/npm global install plus an in-place binary takeover. */
@@ -1573,11 +1783,13 @@ function packageManagerUpdateSteps(
 	manager: "bun" | "npm",
 	release: ReleaseInfo,
 	allowPrerelease: boolean,
+	opts: PackageManagerUpdateStepOptions = {},
 ): ManagerUpdateSteps {
-	return {
+	const verifyInstall = opts.verifyInstall ?? verifyInstalledVersion;
+	const steps: ManagerUpdateSteps = {
 		manager,
-		install: () => (manager === "bun" ? updateViaBun(release) : updateViaNpm(release)),
-		verify: () => verifyInstalledVersion(release.version),
+		install: () => (manager === "bun" ? updateViaBun(release, verifyInstall) : updateViaNpm(release, verifyInstall)),
+		verify: () => verifyInstall(release.version),
 		repair: async launcherPath => {
 			// npm's script shims outrank `.exe` in PowerShell and Git Bash, so
 			// they must be retired rather than merely shadowed.
@@ -1588,6 +1800,8 @@ function packageManagerUpdateSteps(
 			}
 		},
 	};
+	if (opts.allowPathLauncherTakeover === false) steps.allowPathLauncherTakeover = false;
+	return steps;
 }
 
 /**
@@ -1600,12 +1814,16 @@ function packageManagerUpdateSteps(
  * `.bunx` metadata before ignoring EBUSY from the launcher replacement, while
  * npm can retire its shims before an install fails.
  *
- * A successful install whose PATH launcher still reports an older version
- * means the manager no longer controls that launcher, so it is taken over with
- * the standalone binary. A newer launcher may have been installed by a
- * concurrent update and is left untouched. If the install itself failed, a
- * launcher that still reports a version is preserved and the manager error is
- * surfaced; only a missing or unusable launcher is repaired.
+ * A successful install whose launcher still reports an older version means
+ * the manager no longer controls that launcher, so it is taken over with the
+ * standalone binary. A newer launcher may have been installed by a concurrent
+ * update and is left untouched. If the install itself failed, a launcher that
+ * still reports a version is preserved and the manager error is surfaced; only
+ * a missing or unusable launcher is repaired.
+ *
+ * When the updated install is not the PATH launcher
+ * (`allowPathLauncherTakeover: false`), there is no takeover: a stale or
+ * missing PATH entry belongs to a different install and is left untouched.
  */
 export async function updateViaManager(
 	release: ReleaseInfo,
@@ -1633,6 +1851,11 @@ export async function updateViaManager(
 	}
 	if (!launcherPath) {
 		throw installError ?? new Error(formatVerificationFailure(result, release.version));
+	}
+	if (steps.allowPathLauncherTakeover === false) {
+		if (installError) throw installError;
+		printVerificationResult(result, release.version);
+		return;
 	}
 	console.log(
 		chalk.yellow(
@@ -1938,6 +2161,26 @@ function persistChannel(channel: UpdateChannel): void {
 }
 
 /**
+ * Tell the user the PATH-resolved `omp` belongs to a different install that
+ * was deliberately left alone. Skipped when the PATH launcher already reports
+ * the new version (e.g. both installs were updated independently).
+ */
+async function printPathLauncherNote(
+	updatedPath: string,
+	pathLauncher: string,
+	expectedVersion: string,
+): Promise<void> {
+	const check = await verifyBinaryAtPath(pathLauncher, expectedVersion);
+	if (check.ok) return;
+	console.log(
+		chalk.dim(
+			`Note: updated ${updatedPath} to ${expectedVersion}; omp on PATH (${pathLauncher}) is a separate install` +
+				`${check.actual ? ` at ${check.actual}` : ""} and was left untouched.`,
+		),
+	);
+}
+
+/**
  * Run the update command.
  */
 export async function runUpdateCommand(opts: {
@@ -1995,7 +2238,18 @@ export async function runUpdateCommand(opts: {
 	try {
 		const forceBinary = shouldForceBinaryUpdate(release);
 		const allowPrerelease = channel === "canary";
-		const target = await resolveUpdateTarget({ allowPackageManagers: !forceBinary });
+		const { target, pathLauncher, sameInstall } = await resolveUpdateTarget({
+			allowPackageManagers: !forceBinary,
+		});
+		// The updated install is verified directly (and PATH takeovers are
+		// disabled) whenever it is not the PATH launcher.
+		const updatedPath =
+			target.method === "bun" || target.method === "npm" || target.method === "binary" ? target.path : undefined;
+		const detached = !sameInstall && updatedPath !== undefined;
+		const verifyUpdatedInstall =
+			!sameInstall && updatedPath !== undefined
+				? (version: string) => verifyBinaryAtPath(updatedPath, version)
+				: undefined;
 		if (channel === "canary" && (target.method === "nix" || target.method === "brew" || target.method === "mise")) {
 			console.log(chalk.yellow("Canary updates are only supported for bun, npm, or binary installs."));
 			return;
@@ -2011,8 +2265,9 @@ export async function runUpdateCommand(opts: {
 		} else if (target.method === "bun" || target.method === "npm") {
 			if (forceBinary) {
 				// Reachable in forced mode only through a Windows script
-				// launcher resolved from PATH (the bun/npm bin-dir probes are
-				// skipped), so the launcher path is always known.
+				// launcher: a running script entry never classifies as
+				// bun/npm with routing disabled, so selection falls through
+				// to the PATH launcher and its path is always known.
 				if (!target.path) throw new Error(`Could not resolve ${APP_NAME} launcher path in PATH`);
 				console.log(chalk.dim("This release ships as a standalone binary; replacing the script launcher."));
 				await updateViaShimTakeover(target.path, release.version, { allowPrerelease });
@@ -2022,23 +2277,37 @@ export async function runUpdateCommand(opts: {
 					),
 				);
 			} else {
+				const stepOptions: PackageManagerUpdateStepOptions = {};
+				if (verifyUpdatedInstall) {
+					stepOptions.verifyInstall = verifyUpdatedInstall;
+					stepOptions.allowPathLauncherTakeover = false;
+				}
 				await updateViaManager(
 					release,
 					target.path,
-					packageManagerUpdateSteps(target.method, release, allowPrerelease),
+					packageManagerUpdateSteps(target.method, release, allowPrerelease, stepOptions),
 				);
+				if (detached && pathLauncher && updatedPath) {
+					await printPathLauncherNote(updatedPath, pathLauncher, release.version);
+				}
 			}
 		} else {
 			if (forceBinary && target.replacesSymlink) {
 				console.log(chalk.dim("Replacing the package-manager launcher with the standalone binary."));
 			}
-			await updateViaBinaryAt(target.path, release.version, { allowPrerelease });
+			await updateViaBinaryAt(target.path, release.version, {
+				allowPrerelease,
+				...(verifyUpdatedInstall ? { verifyInstalledVersion: () => verifyUpdatedInstall(release.version) } : {}),
+			});
 			if (forceBinary && target.replacesSymlink) {
 				console.log(
 					chalk.yellow(
 						`This install is no longer managed by bun/npm. Removing the old global package may delete this launcher; if it does, reinstall with: ${installerHint()}`,
 					),
 				);
+			}
+			if (detached && pathLauncher && updatedPath) {
+				await printPathLauncherNote(updatedPath, pathLauncher, release.version);
 			}
 		}
 		if (opts.channel) persistChannel(channel);

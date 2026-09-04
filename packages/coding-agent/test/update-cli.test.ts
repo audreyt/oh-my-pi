@@ -28,7 +28,9 @@ import {
 	resolveReleaseBinaryAsset,
 	resolveReleaseDist,
 	resolveReleaseRename,
+	resolveRunningEntryPath,
 	resolveUpdateMethodForTest,
+	resolveUpdateTargetFromCandidates,
 	resolveUpdateTargetFromPath,
 	shouldForceBinaryUpdate,
 	sweepStaleUpdateArtifacts,
@@ -1624,5 +1626,199 @@ describe("update-cli manager update recovery", () => {
 		await expect(updateViaManager(release, launcherPath, steps)).rejects.toThrow(
 			"update did not produce a working launcher and binary repair failed: Error: no binary asset",
 		);
+	});
+});
+
+describe("update-cli running-install targeting", () => {
+	const release: ReleaseInfo = {
+		tag: "v18.0.1",
+		version: "18.0.1",
+		packages: { pkg: "@oh-my-pi/pi-coding-agent", natives: "@oh-my-pi/pi-natives" },
+	};
+
+	it("reports the compiled binary from Bun.main", () => {
+		expect(resolveRunningEntryPath({ bunMain: "/usr/local/bin/omp", argv1: "update" })).toBe("/usr/local/bin/omp");
+	});
+
+	it("reports the entry script for bun script launches", () => {
+		const script = "/g/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js";
+		expect(resolveRunningEntryPath({ bunMain: script })).toBe(script);
+	});
+
+	it("resolves node script launches via argv[1] only on a runtime image", () => {
+		const script = "/g/lib/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js";
+		expect(resolveRunningEntryPath({ bunMain: undefined, execPath: "/usr/local/bin/node", argv1: script })).toBe(
+			script,
+		);
+	});
+
+	it("ignores argv[1] when the process image is not a JS runtime", () => {
+		// In a compiled binary argv[1] is the first user argument ("update"),
+		// which must never be treated as an install path.
+		expect(
+			resolveRunningEntryPath({ bunMain: undefined, execPath: "/usr/local/bin/omp", argv1: "update" }),
+		).toBeUndefined();
+	});
+
+	it("leaves TypeScript source runs to PATH behavior", () => {
+		expect(resolveRunningEntryPath({ bunMain: "/repo/packages/coding-agent/src/cli.ts" })).toBeUndefined();
+	});
+
+	it("routes a running bun-global entry script through bun instead of a binary overwrite", async () => {
+		// Failure mode: the updater would download a native executable and
+		// rename it over dist/cli.js, destroying the managed install.
+		const dir = await makeTempDir();
+		const globalDir = path.join(dir, "bun-global");
+		const script = path.join(globalDir, "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js");
+		await fs.mkdir(path.dirname(script), { recursive: true });
+		await Bun.write(script, "cli");
+
+		const target = resolveUpdateTargetFromPath(script, undefined, {
+			allowPackageManagers: true,
+			bunGlobalDir: globalDir,
+		});
+
+		expect(target).toEqual({ method: "bun", path: script });
+		expect(await Bun.file(script).text()).toBe("cli");
+	});
+
+	it("derives bun ownership from the bin dir when the global dir is unknown", () => {
+		const script = "/test/home/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js";
+
+		const method = resolveUpdateMethodForTest(script, "/test/home/.bun/bin", { allowPackageManagers: true });
+
+		expect(method).toBe("bun");
+	});
+
+	it("routes a running npm-global entry script through npm", () => {
+		const method = resolveUpdateMethodForTest(
+			"/test/npm-global/lib/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js",
+			undefined,
+			{ allowPackageManagers: true, npmBinDir: "/test/npm-global/bin" },
+		);
+
+		expect(method).toBe("npm");
+	});
+
+	it("prefers the running install over the PATH launcher and marks them detached", () => {
+		// A bun-managed copy invoked while PATH resolves to a standalone
+		// binary: the update must apply to the running install, and the
+		// foreign PATH launcher must be reported rather than repaired.
+		const script = "/test/bun-global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js";
+		const launcher = "/test/local/bin/omp";
+
+		const resolution = resolveUpdateTargetFromCandidates([script, launcher], undefined, {
+			allowPackageManagers: true,
+			bunGlobalDir: "/test/bun-global",
+			pathLauncher: launcher,
+		});
+
+		expect(resolution.target).toEqual({ method: "bun", path: script });
+		expect(resolution.pathLauncher).toBe(launcher);
+		expect(resolution.sameInstall).toBe(false);
+	});
+
+	it("defers an unrecognized running script to the PATH launcher", () => {
+		// A bunx cache entry or local checkout is a script no manager owns: a
+		// binary verdict there only means "unrecognized", so selection falls
+		// through instead of overwriting the script with a native executable.
+		const script = "/test/checkout/dist/cli.js";
+		const launcher = "/test/local/bin/omp";
+
+		const resolution = resolveUpdateTargetFromCandidates([script, launcher], undefined, {
+			allowPackageManagers: true,
+			pathLauncher: launcher,
+		});
+
+		expect(resolution.target).toEqual({ method: "binary", path: launcher, replacesSymlink: false });
+		expect(resolution.sameInstall).toBe(true);
+	});
+
+	it("treats a running script behind its own PATH symlink as one install", async () => {
+		const dir = await makeTempDir();
+		const globalDir = path.join(dir, "bun-global");
+		const binDir = path.join(dir, "bun-bin");
+		const script = path.join(globalDir, "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js");
+		const link = path.join(binDir, "omp");
+		await fs.mkdir(path.dirname(script), { recursive: true });
+		await fs.mkdir(binDir, { recursive: true });
+		await Bun.write(script, "cli");
+		await fs.symlink(script, link);
+
+		const resolution = resolveUpdateTargetFromCandidates([script, link], path.join(binDir, "bun"), {
+			allowPackageManagers: true,
+			bunGlobalDir: globalDir,
+			pathLauncher: link,
+		});
+
+		expect(resolution.target).toEqual({ method: "bun", path: script });
+		expect(resolution.sameInstall).toBe(true);
+	});
+
+	it("treats identical running and PATH candidates as one install", () => {
+		const launcher = "/test/local/bin/omp";
+
+		const resolution = resolveUpdateTargetFromCandidates([launcher, launcher], undefined, {
+			allowPackageManagers: true,
+			pathLauncher: launcher,
+		});
+
+		expect(resolution.target).toEqual({ method: "binary", path: launcher, replacesSymlink: false });
+		expect(resolution.sameInstall).toBe(true);
+	});
+
+	function detachedStepScript(script: {
+		install: InstalledVersionVerification | Error | undefined;
+		verify?: InstalledVersionVerification;
+	}): { steps: ManagerUpdateSteps; calls: string[] } {
+		const calls: string[] = [];
+		return {
+			calls,
+			steps: {
+				manager: "bun",
+				allowPathLauncherTakeover: false,
+				async install() {
+					calls.push("install");
+					if (script.install instanceof Error) throw script.install;
+					return script.install;
+				},
+				async verify() {
+					calls.push("verify");
+					return script.verify ?? { ok: false };
+				},
+				async repair(target) {
+					calls.push(`repair:${target}`);
+				},
+			},
+		};
+	}
+
+	it("reports a stale detached install without taking over the foreign PATH launcher", async () => {
+		// The updated install is separate from PATH `omp`: a stale check must
+		// surface as a warning, never as a binary takeover of a foreign launcher.
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const foreignLauncher = "/test/local/bin/omp";
+		const { steps, calls } = detachedStepScript({
+			install: {
+				ok: false,
+				path: "/test/bun-global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js",
+				actual: "17.4.2",
+			},
+		});
+
+		await updateViaManager(release, foreignLauncher, steps);
+
+		expect(calls).toEqual(["install"]);
+	});
+
+	it("surfaces the install failure without touching the foreign PATH launcher", async () => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		const { steps, calls } = detachedStepScript({
+			install: new Error("bun install failed with exit code 1"),
+			verify: { ok: false, path: "/test/local/bin/omp", actual: "17.4.2" },
+		});
+
+		await expect(updateViaManager(release, "/test/local/bin/omp", steps)).rejects.toThrow("exit code 1");
+		expect(calls).toEqual(["install", "verify"]);
 	});
 });
