@@ -370,6 +370,50 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		expect(model.thinking?.efforts).not.toContain(Effort.Max);
 	});
 
+	it("exposes the max tier only on muse-spark-1.3 and its contributor", () => {
+		const spark13 = buildModel(
+			completionsSpec({
+				id: "muse-spark-1.3",
+				name: "Muse Spark 1.3",
+				provider: "meta",
+				baseUrl: "https://api.meta.ai/v1",
+				reasoning: true,
+				input: ["text", "image"],
+			}),
+		);
+		expect(spark13.thinking?.efforts).toEqual([
+			Effort.Minimal,
+			Effort.Low,
+			Effort.Medium,
+			Effort.High,
+			Effort.XHigh,
+			Effort.Max,
+		]);
+		const contributor = buildModel(
+			completionsSpec({
+				id: "muse-spark-1.3-contributor",
+				name: "Muse Spark 1.3 Contributor",
+				provider: "meta",
+				baseUrl: "https://api.meta.ai/v1",
+				reasoning: true,
+				input: ["text", "image"],
+			}),
+		);
+		expect(contributor.thinking?.efforts).toContain(Effort.Max);
+		const spark12 = buildModel(
+			completionsSpec({
+				id: "muse-spark-1.2",
+				name: "Muse Spark 1.2",
+				provider: "meta",
+				baseUrl: "https://api.meta.ai/v1",
+				reasoning: true,
+				input: ["text", "image"],
+			}),
+		);
+		expect(spark12.thinking?.efforts).toContain(Effort.XHigh);
+		expect(spark12.thinking?.efforts).not.toContain(Effort.Max);
+	});
+
 	it("lets an explicit compat.supportsReasoningEffort override the allowlist default", () => {
 		const compat = resolveModelPolicy({
 			...grokResponsesSpec("grok-build"),
