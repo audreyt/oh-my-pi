@@ -198,7 +198,7 @@ describe("STTController preflight", () => {
 		controller = new STTController(() => ({ stop: vi.fn() }));
 		await controller.toggle(editor, makeOptions());
 		expect(controller.state).toBe("recording");
-		expect(status).toHaveBeenLastCalledWith("en");
+		expect(status).toHaveBeenLastCalledWith("en", expect.any(AbortSignal));
 
 		await controller.toggle(editor, makeOptions());
 		settings.set("stt.language", "zh-Hant");
@@ -206,7 +206,7 @@ describe("STTController preflight", () => {
 
 		expect(controller.state).toBe("recording");
 		expect(status).toHaveBeenCalledTimes(2);
-		expect(status).toHaveBeenLastCalledWith("zh-Hant");
+		expect(status).toHaveBeenLastCalledWith("zh-Hant", expect.any(AbortSignal));
 	});
 
 	it("forwards cancellation to Apple locale preparation", async () => {
@@ -240,6 +240,48 @@ describe("STTController preflight", () => {
 		).rejects.toHaveProperty("name", "AbortError");
 		expect(prepare).toHaveBeenCalledTimes(1);
 		expect(onProgress).not.toHaveBeenCalled();
+	});
+
+	it("does not start capture when disposed during Apple locale preparation", async () => {
+		settings.set("stt.modelName", "macos");
+		const entered = Promise.withResolvers<AbortSignal>();
+		vi.spyOn(appleSpeechClient, "status").mockResolvedValue({
+			success: true,
+			available: true,
+			supported: true,
+			installed: false,
+			locale: "en",
+			displayName: "Apple SpeechAnalyzer",
+			systemManaged: true,
+		});
+		vi.spyOn(appleSpeechClient, "prepare").mockImplementation((_language, signal) => {
+			if (!signal) throw new Error("Apple locale preparation requires a cancellation signal");
+			entered.resolve(signal);
+			const { promise, reject } = Promise.withResolvers<never>();
+			const fail = (): void => {
+				reject(
+					signal.reason instanceof Error
+						? signal.reason
+						: new DOMException("The operation was aborted.", "AbortError"),
+				);
+			};
+			if (signal.aborted) fail();
+			else signal.addEventListener("abort", fail, { once: true });
+			return promise;
+		});
+		const startStream = vi.spyOn(appleSpeechClient, "startStream");
+		const createCapture = vi.fn(() => ({ stop: vi.fn() }));
+		controller = new STTController(createCapture);
+		const options = makeOptions();
+		const toggling = controller.toggle(makeEditor(), options);
+		const signal = await entered.promise;
+		controller.dispose();
+		expect(signal.aborted).toBe(true);
+		await toggling;
+		expect(controller.state).toBe("idle");
+		expect(startStream).not.toHaveBeenCalled();
+		expect(createCapture).not.toHaveBeenCalled();
+		expect(options.showWarning).not.toHaveBeenCalled();
 	});
 
 	it("stops recording and surfaces asynchronous microphone failures", async () => {
