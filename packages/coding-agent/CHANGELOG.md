@@ -18,7 +18,7 @@
 - A contended `afm-core` sidecar compile lock no longer disables title generation for the rest of the process.
 - `afm-core` now validates its sidecar cache under the compile lock so a concurrent install cannot return a mismatched helper.
 - Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
-- Interrupted `afm-core` upgrades no longer leave stale cache stamps that validate a different sidecar build.
+- `afm-core` sidecars use build- and architecture-specific cache paths, preventing concurrent installs or interrupted upgrades from replacing a helper another process is about to launch.
 - Transient `afm-core` startup, process, and response errors no longer disable subsequent title requests.
 
 

@@ -485,80 +485,88 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 });
 
 describe("AFM sidecar cache publication", () => {
-	async function seedStaleAfmCache(cacheDir: string): Promise<{
-		binPath: string;
-		helperPath: string;
-		oldStamp: string;
-		keepTmp: string;
-		keepLock: string;
-	}> {
-		await fs.promises.mkdir(cacheDir, { recursive: true });
-		const binPath = path.join(cacheDir, "omp-apple-fm");
-		const oldStamp = path.join(cacheDir, "omp-apple-fm.cafef00d");
-		const keepTmp = path.join(cacheDir, "omp-apple-fm.keep.tmp");
-		const keepLock = path.join(cacheDir, "omp-apple-fm.keep.lock");
-		const helperPath = path.join(cacheDir, "new-helper");
-		await Bun.write(binPath, "OLD_HELPER\n");
-		await Bun.write(oldStamp, "cafef00d\n");
-		await Bun.write(keepTmp, "tmp-artifact\n");
-		await Bun.write(keepLock, "lock-artifact\n");
-		await Bun.write(helperPath, "NEW_HELPER\n");
-		return { binPath, helperPath, oldStamp, keepTmp, keepLock };
+	async function writeHelper(dir: string, name: string, contents: string): Promise<string> {
+		const helperPath = path.join(dir, name);
+		await Bun.write(helperPath, contents);
+		return helperPath;
 	}
 
-	it("cannot leave an old stamp claiming a replaced helper after a crash", async () => {
+	it("installing one cache identity does not replace another identity's sidecar", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-cache-"));
+		const cacheDir = path.join(dir, "apple-fm");
+		try {
+			const helperA = await writeHelper(dir, "helper-a", "IDENTITY_A\n");
+			const helperB = await writeHelper(dir, "helper-b", "IDENTITY_B\n");
+			const pathA = await __internalsForTesting.installAfmSidecar(
+				cacheDir,
+				undefined,
+				async () => helperA,
+				"arch-a",
+			);
+			expect(pathA).toBe(path.join(cacheDir, "omp-apple-fm-arch-a"));
+			expect(await Bun.file(pathA).text()).toBe("IDENTITY_A\n");
+			expect((await fs.promises.stat(pathA)).mode & 0o777).toBe(0o755);
+
+			const pathB = await __internalsForTesting.installAfmSidecar(
+				cacheDir,
+				undefined,
+				async () => helperB,
+				"arch-b",
+			);
+			expect(pathB).toBe(path.join(cacheDir, "omp-apple-fm-arch-b"));
+			expect(pathB).not.toBe(pathA);
+			expect(await Bun.file(pathA).text()).toBe("IDENTITY_A\n");
+			expect(await Bun.file(pathB).text()).toBe("IDENTITY_B\n");
+			expect((await fs.promises.stat(pathB)).mode & 0o777).toBe(0o755);
+
+			const again = await __internalsForTesting.installAfmSidecar(
+				cacheDir,
+				undefined,
+				async () => helperB,
+				"arch-b",
+			);
+			expect(again).toBe(pathB);
+			expect(await Bun.file(pathA).text()).toBe("IDENTITY_A\n");
+			expect(await Bun.file(pathB).text()).toBe("IDENTITY_B\n");
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps a published identity sidecar after a crash without deleting another identity", async () => {
 		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-cache-"));
 		const cacheDir = path.join(dir, "apple-fm");
 		const rename = fs.promises.rename.bind(fs.promises);
 		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async (source, target) => {
 			await rename(source, target);
-			if (path.basename(String(target)) === "omp-apple-fm") {
+			if (path.basename(String(target)) === "omp-apple-fm-arch-b") {
 				throw new Error("crash after publishing sidecar binary");
 			}
 		});
 		try {
-			const { binPath, helperPath, oldStamp, keepTmp, keepLock } = await seedStaleAfmCache(cacheDir);
+			const helperA = await writeHelper(dir, "helper-a", "IDENTITY_A\n");
+			const helperB = await writeHelper(dir, "helper-b", "IDENTITY_B\n");
+			const pathA = await __internalsForTesting.installAfmSidecar(
+				cacheDir,
+				undefined,
+				async () => helperA,
+				"arch-a",
+			);
+			expect(pathA).toBe(path.join(cacheDir, "omp-apple-fm-arch-a"));
+			const pathB = path.join(cacheDir, "omp-apple-fm-arch-b");
 			await expect(
-				__internalsForTesting.installAfmSidecar(cacheDir, undefined, async () => helperPath),
+				__internalsForTesting.installAfmSidecar(cacheDir, undefined, async () => helperB, "arch-b"),
 			).rejects.toThrow("crash after publishing sidecar binary");
-			expect(await Bun.file(oldStamp).exists()).toBe(false);
-			expect(await Bun.file(binPath).text()).toBe("NEW_HELPER\n");
-			expect(
-				await Bun.file(path.join(cacheDir, `omp-apple-fm.${__internalsForTesting.cacheIdentity()}`)).exists(),
-			).toBe(false);
-			expect(await Bun.file(keepTmp).text()).toBe("tmp-artifact\n");
-			expect(await Bun.file(keepLock).text()).toBe("lock-artifact\n");
+			expect(await Bun.file(pathB).text()).toBe("IDENTITY_B\n");
+			expect(await Bun.file(pathA).text()).toBe("IDENTITY_A\n");
+			renameSpy.mockRestore();
+			await expect(
+				__internalsForTesting.installAfmSidecar(cacheDir, undefined, async () => helperB, "arch-b"),
+			).resolves.toBe(pathB);
+			expect(await Bun.file(pathB).text()).toBe("IDENTITY_B\n");
+			expect(await Bun.file(pathA).text()).toBe("IDENTITY_A\n");
 		} finally {
 			renameSpy.mockRestore();
-			await fs.promises.rm(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("does not replace the helper when stale stamp invalidation fails", async () => {
-		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-cache-"));
-		const cacheDir = path.join(dir, "apple-fm");
-		const oldStamp = path.join(cacheDir, "omp-apple-fm.cafef00d");
-		const rm = fs.promises.rm.bind(fs.promises);
-		const rmSpy = spyOn(fs.promises, "rm").mockImplementation(async (target, options) => {
-			if (path.resolve(String(target)) === path.resolve(oldStamp)) {
-				throw Object.assign(new Error("operation not permitted"), { code: "EACCES" });
-			}
-			return rm(target, options);
-		});
-		try {
-			const { binPath, helperPath, keepTmp, keepLock } = await seedStaleAfmCache(cacheDir);
-			await expect(
-				__internalsForTesting.installAfmSidecar(cacheDir, undefined, async () => helperPath),
-			).rejects.toThrow("operation not permitted");
-			expect(await Bun.file(oldStamp).exists()).toBe(true);
-			expect(await Bun.file(binPath).text()).toBe("OLD_HELPER\n");
-			expect(
-				await Bun.file(path.join(cacheDir, `omp-apple-fm.${__internalsForTesting.cacheIdentity()}`)).exists(),
-			).toBe(false);
-			expect(await Bun.file(keepTmp).text()).toBe("tmp-artifact\n");
-			expect(await Bun.file(keepLock).text()).toBe("lock-artifact\n");
-		} finally {
-			rmSpy.mockRestore();
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
