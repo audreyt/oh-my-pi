@@ -2,17 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub Copilot sign-in now requests only basic profile access, restoring login for Enterprise organizations that reject repository, gist, and Codespaces permissions ([#10656](https://github.com/can1357/oh-my-pi/issues/10656)).
+
+## [18.1.9] - 2026-09-04
+
 ### Added
 - Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
 - Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch
 ### Breaking Changes
 
-- Added recoverable native custom-scheme OAuth callbacks on macOS, Linux desktops, and Windows, with manual fallback for unavailable or remote sessions.
+- Added recoverable native custom-scheme OAuth callbacks for macOS, Linux desktops, and Windows, with a manual fallback for unavailable or remote sessions.
 
 ### Fixed
 
-- Fixed race condition causing duplicate manual code prompts during OAuth flows
-- Fixed Gemini tool continuations through custom Anthropic Messages proxies and OpenAI Responses relays, ensuring tool calls and results remain correctly associated across multi-turn requests.
+- Fixed Gemini tool continuations through custom Anthropic Messages proxies and OpenAI Responses relays, preserving tool-call and result associations across multi-turn requests.
 
 ## [18.1.8] - 2026-09-03
 
@@ -29,6 +34,9 @@
 ### Fixed
 
 - Fixed DeepSeek-family Responses replay (e.g. opencode-go) rejecting a resumed thinking-mode turn with `400 The reasoning_text in the thinking mode must be passed back to the API` when compaction dropped the turn's reasoning; a non-empty placeholder is now synthesized instead of an empty `reasoning_text` ([#10690](https://github.com/can1357/oh-my-pi/issues/10690)).
+### Fixed
+
+- Fixed pi-native streams treating a connection that closed before its terminal event as a successful empty response; incomplete streams and namespaced gateway 5xx failures now remain retryable.
 
 ## [18.1.6] - 2026-09-03
 
@@ -52,6 +60,7 @@
 - Anthropic and OpenRouter credit-exhaustion errors now automatically switch to a sibling account instead of stopping the turn with a retry hint.
 - Fixed OpenCode Go and Zen requests by including the required stable per-conversation session identification.
 - Improved Anthropic prompt caching so explicit cache breakpoints preserve reusable tools and system prompts when the message tail changes.
+- Anthropic and OpenRouter 402 credit-exhaustion errors ("would exceed your available credits", "Insufficient credits") now switch to a sibling account instead of stopping the turn with a retry hint.
 
 ## [18.1.5] - 2026-09-03
 
