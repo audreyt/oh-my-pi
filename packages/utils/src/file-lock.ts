@@ -13,6 +13,8 @@ export interface FileLockOptions {
 	retries?: number;
 	/** Delay between acquisition attempts. */
 	retryDelayMs?: number;
+	/** Abort waiting for a contended lock. */
+	signal?: AbortSignal;
 }
 
 /** An exclusive OS-backed lease. Releasing an already released handle is safe. */
@@ -20,10 +22,10 @@ export interface FileLockHandle {
 	release(): void;
 }
 
-const DEFAULT_OPTIONS: Required<FileLockOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<FileLockOptions, "signal">> = {
 	retries: 50,
 	retryDelayMs: 100,
-};
+} as const;
 
 function getLockPath(filePath: string): string {
 	return `${path.resolve(filePath)}.lock`;
@@ -36,16 +38,22 @@ function tryAcquireLock(lockPath: string): NativeFileLock | null {
 
 /** Acquire an exclusive lease; callers must release it when their operation ends. */
 export async function acquireFileLock(filePath: string, options: FileLockOptions = {}): Promise<FileLockHandle> {
-	const opts = { ...DEFAULT_OPTIONS, ...options };
+	const retries = options.retries ?? DEFAULT_OPTIONS.retries;
+	const retryDelayMs = options.retryDelayMs ?? DEFAULT_OPTIONS.retryDelayMs;
 	const lockPath = getLockPath(filePath);
 
-	for (let attempt = 0; attempt < opts.retries; attempt++) {
+	for (let attempt = 0; attempt < retries; attempt++) {
+		if (options.signal?.aborted) {
+			throw options.signal.reason instanceof Error
+				? options.signal.reason
+				: new DOMException("The operation was aborted.", "AbortError");
+		}
 		const lock = tryAcquireLock(lockPath);
 		if (lock) return lock;
-		if (attempt + 1 < opts.retries) await Bun.sleep(opts.retryDelayMs);
+		if (attempt + 1 < retries) await Bun.sleep(retryDelayMs);
 	}
 
-	throw new Error(`Failed to acquire lock for ${filePath} after ${opts.retries} attempts`);
+	throw new Error(`Failed to acquire lock for ${filePath} after ${retries} attempts`);
 }
 
 function acquireLockSync(filePath: string, options: FileLockOptions = {}): NativeFileLock {
