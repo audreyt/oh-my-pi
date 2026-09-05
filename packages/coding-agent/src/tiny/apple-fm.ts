@@ -145,7 +145,7 @@ async function publishSidecar(srcPath: string, destPath: string): Promise<void> 
 	}
 	await Bun.write(tmpPath, bytes);
 	await fs.promises.chmod(tmpPath, 0o755);
-	fs.renameSync(tmpPath, destPath);
+	await fs.promises.rename(tmpPath, destPath);
 }
 
 async function compileSidecar(srcPath: string, binPath: string, signal?: AbortSignal): Promise<void> {
@@ -208,7 +208,7 @@ export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
 				} else {
 					await Bun.write(srcPath, sidecarSource);
 					await compileSidecar(srcPath, tmpPath, signal);
-					fs.renameSync(tmpPath, binPath);
+					await fs.promises.rename(tmpPath, binPath);
 				}
 			} catch (error) {
 				await fs.promises.rm(tmpPath, { force: true });
@@ -231,7 +231,7 @@ export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
 			await Bun.write(stampPath, `${hash}\n`);
 			return binPath;
 		},
-		{ retries: 120, retryDelayMs: 250 },
+		{ retries: 120, retryDelayMs: 250, signal },
 	);
 }
 
