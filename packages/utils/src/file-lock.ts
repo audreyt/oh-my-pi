@@ -22,6 +22,21 @@ const DEFAULT_OPTIONS = {
 	retryDelayMs: 100,
 } as const;
 
+/**
+ * Thrown when a contended lock is still unavailable after the retry budget.
+ * Callers that map lock contention onto their own domain errors match on
+ * this type instead of the message text.
+ */
+export class LockAcquireError extends Error {
+	constructor(
+		readonly filePath: string,
+		readonly attempts: number,
+	) {
+		super(`Failed to acquire lock for ${filePath} after ${attempts} attempts`);
+		this.name = "LockAcquireError";
+	}
+}
+
 function getLockPath(filePath: string): string {
 	return `${path.resolve(filePath)}.lock`;
 }
@@ -73,7 +88,7 @@ async function acquireLock(filePath: string, options: FileLockOptions = {}): Pro
 		if (attempt + 1 < retries) await delay(retryDelayMs, options.signal);
 	}
 
-	throw new Error(`Failed to acquire lock for ${filePath} after ${retries} attempts`);
+	throw new LockAcquireError(filePath, retries);
 }
 
 /** Run `fn` while holding an OS-backed exclusive lock for `filePath`. */

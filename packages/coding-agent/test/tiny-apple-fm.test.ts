@@ -5,6 +5,11 @@ import * as path from "node:path";
 import { resolveModels } from "@oh-my-pi/pi-coding-agent/cli/tiny-models-cli";
 import { getTinyLocalModelSpec } from "@oh-my-pi/pi-coding-agent/tiny/models";
 import { TinyTitleClient } from "../src/tiny/title-client";
+import {
+	LockAcquireError,
+	__internalsForTesting as fileLockInternals,
+	withFileLock,
+} from "@oh-my-pi/pi-utils/file-lock";
 import * as appleFm from "../src/tiny/apple-fm";
 
 const {
@@ -15,6 +20,8 @@ const {
 	resolveBundledSidecarPath,
 	__internalsForTesting,
 } = appleFm;
+
+const { tryAcquireLock, getLockPath } = fileLockInternals;
 
 const previousSidecar = process.env[AFM_CORE_SIDECAR_ENV];
 
@@ -281,8 +288,11 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 		}
 	});
 
-	it("treats sidecar install lock timeout as request-scoped", async () => {
+	it("treats a contended sidecar install lock as request-scoped", async () => {
 		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		const target = path.join(dir, "omp-apple-fm");
+		const held = tryAcquireLock(getLockPath(target));
+		expect(held).not.toBeNull();
 		try {
 			const sidecar = await writeFakeSidecar(
 				dir,
@@ -291,9 +301,16 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-			const spy = spyOn(appleFm, "completeAfmCore").mockRejectedValue(
-				new Error("apple_fm_busy: sidecar install lock"),
+			// The install path cannot run with the env override set, so take the
+			// error a contended install would raise and drive it through the same
+			// translation ensureAfmSidecar applies.
+			const contended = await withFileLock(target, async () => "unreachable", { retries: 1 }).then(
+				() => undefined,
+				(error: unknown) => error,
 			);
+			expect(contended).toBeInstanceOf(LockAcquireError);
+			const mapped = __internalsForTesting.mapSidecarInstallError(contended);
+			const spy = spyOn(appleFm, "completeAfmCore").mockRejectedValue(mapped);
 			try {
 				const client = new TinyTitleClient();
 				const events: string[] = [];
@@ -308,6 +325,7 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 				spy.mockRestore();
 			}
 		} finally {
+			held?.release();
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
