@@ -490,12 +490,12 @@ async function postImageEndpointRequest(options: {
 				...configuredHeaders,
 				...options.headers,
 				"Content-Type": "application/json",
-				"User-Agent": USER_AGENT,
 			};
-			// A caller-supplied Authorization under any casing (e.g. a
-			// Meta-compatible proxy via providers.meta.headers) wins over the
-			// generated bearer, matching resolveOpenAIRequestSetup.
+			// Caller-supplied Authorization/User-Agent under any casing (e.g. a
+			// Meta-compatible proxy via providers.meta.headers) win over the
+			// generated defaults, matching resolveOpenAIRequestSetup.
 			setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
+			setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
 				headers,
