@@ -1,13 +1,20 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { renderHtmlToText } from "@oh-my-pi/pi-coding-agent/tools/fetch";
-import { KEENABLE_FETCH_PUBLIC_URL, KEENABLE_FETCH_URL } from "@oh-my-pi/pi-coding-agent/web/keenable";
+import {
+	fetchKeenablePage,
+	KEENABLE_FETCH_PUBLIC_URL,
+	KEENABLE_FETCH_URL,
+} from "@oh-my-pi/pi-coding-agent/web/keenable";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
-import { asGlobalFetch } from "../helpers/fetch-mock";
+import { asGlobalFetch, mockFetch } from "../helpers/fetch-mock";
+
+const originalKeenableApiKey = process.env.KEENABLE_API_KEY;
 
 describe("renderHtmlToText: Keenable reader", () => {
 	afterEach(() => {
-		delete process.env.KEENABLE_API_KEY;
+		if (originalKeenableApiKey === undefined) delete process.env.KEENABLE_API_KEY;
+		else process.env.KEENABLE_API_KEY = originalKeenableApiKey;
 	});
 
 	const markdown = `# Authenticated article\n\n${"Substantive reader content. ".repeat(8)}`.trim();
@@ -96,5 +103,16 @@ describe("renderHtmlToText: Keenable reader", () => {
 
 		expect(keenableCalled).toBe(false);
 		expect(result.method).not.toBe("keenable");
+	});
+});
+
+describe("fetchKeenablePage", () => {
+	it("returns null when a 200 response is not JSON", async () => {
+		const result = await fetchKeenablePage({
+			url: "https://example.com/article",
+			apiKey: "test-keenable-key",
+			fetch: mockFetch(() => new Response("not json", { status: 200 })),
+		});
+		expect(result).toBeNull();
 	});
 });

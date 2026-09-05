@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
 import { KEENABLE_SEARCH_PUBLIC_URL, KEENABLE_SEARCH_URL } from "@oh-my-pi/pi-coding-agent/web/keenable";
-import { buildRequestBody, searchKeenable } from "@oh-my-pi/pi-coding-agent/web/search/providers/keenable";
+import {
+	buildRequestBody,
+	KeenableProvider,
+	searchKeenable,
+} from "@oh-my-pi/pi-coding-agent/web/search/providers/keenable";
 import type { SearchProviderError } from "@oh-my-pi/pi-coding-agent/web/search/types";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 
+const originalKeenableApiKey = process.env.KEENABLE_API_KEY;
 describe("Keenable web search provider", () => {
 	beforeEach(() => {
 		process.env.KEENABLE_API_KEY = "test-keenable-key";
@@ -12,7 +17,8 @@ describe("Keenable web search provider", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
-		delete process.env.KEENABLE_API_KEY;
+		if (originalKeenableApiKey === undefined) delete process.env.KEENABLE_API_KEY;
+		else process.env.KEENABLE_API_KEY = originalKeenableApiKey;
 	});
 
 	const fakeAuthStorage = {
@@ -38,6 +44,28 @@ describe("Keenable web search provider", () => {
 		} as const;
 	}
 
+	it("keeps a rotated credential across the recency fallback", async () => {
+		let key = "rejected-key";
+		const sentKeys: (string | null)[] = [];
+		vi.spyOn(fakeAuthStorage, "resolver").mockReturnValue(async () => key);
+		const response = await searchKeenable({
+			...makeParams("ai chips"),
+			recency: "day",
+			fetch: async (_input, init) => {
+				const sent = new Headers(init?.headers).get("x-api-key");
+				sentKeys.push(sent);
+				if (sent === "rejected-key") {
+					key = "working-key";
+					return Response.json({ error: "invalid key" }, { status: 401 });
+				}
+				return Response.json({
+					results: sentKeys.length === 2 ? [] : [{ title: "Found", url: "https://example.com/found" }],
+				});
+			},
+		});
+		expect(sentKeys).toEqual(["rejected-key", "working-key", "working-key"]);
+		expect(response.sources[0]?.url).toBe("https://example.com/found");
+	});
 	it("maps Keenable hits into SearchResponse and forwards recency as published_after", async () => {
 		let requestUrl = "";
 		let requestHeaders: Headers | undefined;
@@ -102,7 +130,18 @@ describe("Keenable web search provider", () => {
 		expect(response.sources[0]?.ageSeconds).toBeTypeOf("number");
 	});
 
-	it("maps a single site: directive to site and strips it from the query", async () => {
+	it.each([
+		{
+			name: "maps a bare positive site natively",
+			query: "typescript site:github.com",
+			expectedQuery: "typescript",
+		},
+		{
+			name: "preserves excluded sites alongside the native positive host",
+			query: "typescript site:github.com -site:gist.github.com",
+			expectedQuery: "typescript site:github.com -site:gist.github.com",
+		},
+	])("$name", async ({ query, expectedQuery }) => {
 		let requestBody: Record<string, unknown> | null = null;
 		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			requestBody = JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>;
@@ -113,16 +152,57 @@ describe("Keenable web search provider", () => {
 		};
 
 		await searchKeenable({
-			...makeParams("typescript site:github.com"),
+			...makeParams(query),
 			fetch: fetchMock,
 		});
 
 		expect(requestBody).toMatchObject({
-			query: "typescript",
+			query: expectedQuery,
 			site: "github.com",
 		});
 	});
 
+	it("keeps a path-scoped site: in the query while mapping the host natively", async () => {
+		let requestBody: Record<string, unknown> | null = null;
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			requestBody = JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>;
+			return new Response(JSON.stringify({ results: [] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		await searchKeenable({
+			...makeParams("claude sdk site:github.com/anthropics"),
+			fetch: fetchMock,
+		});
+
+		expect(requestBody).toMatchObject({
+			query: "claude sdk site:github.com/anthropics",
+			site: "github.com",
+		});
+	});
+
+	it("leaves multiple site: directives in the query without a native site field", async () => {
+		let requestBody: Record<string, unknown> | null = null;
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			requestBody = JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>;
+			return new Response(JSON.stringify({ results: [] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		await searchKeenable({
+			...makeParams("cve site:nvd.nist.gov site:mitre.org"),
+			fetch: fetchMock,
+		});
+
+		expect(requestBody).toMatchObject({
+			query: "cve (site:nvd.nist.gov OR site:mitre.org)",
+		});
+		expect(requestBody).not.toHaveProperty("site");
+	});
 	it("maps after:/before: to published_after/published_before instead of recency", async () => {
 		expect(
 			buildRequestBody({
@@ -178,6 +258,84 @@ describe("Keenable web search provider", () => {
 		]);
 	});
 
+	it("expires the recency fallback at the original deadline", async () => {
+		const deadlines: AbortController[] = [];
+		vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+			const deadline = new AbortController();
+			deadlines.push(deadline);
+			return deadline.signal;
+		});
+		let attempts = 0;
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			if (++attempts === 1) {
+				return Response.json({ results: [] });
+			}
+			deadlines[0]!.abort(new DOMException("Search deadline expired", "TimeoutError"));
+			init?.signal?.throwIfAborted();
+			return Response.json({ results: [{ title: "Too late", url: "https://example.com/late" }] });
+		};
+		await expect(
+			searchKeenable({
+				...makeParams("ai chips"),
+				recency: "day",
+				timeoutMs: 1_000,
+				fetch: fetchMock,
+			}),
+		).rejects.toThrow("Search deadline expired");
+	});
+
+	it("propagates caller abort through the shared recency-fallback deadline", async () => {
+		const ac = new AbortController();
+		const signals: AbortSignal[] = [];
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			signals.push(init?.signal as AbortSignal);
+			if (signals.length === 1) {
+				return new Response(JSON.stringify({ results: [] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+			ac.abort(new Error("user-cancel"));
+			throw init?.signal?.reason ?? new DOMException("Aborted", "AbortError");
+		};
+
+		await expect(
+			searchKeenable({
+				...makeParams("ai chips"),
+				recency: "day",
+				signal: ac.signal,
+				timeoutMs: 60_000,
+				fetch: fetchMock,
+			}),
+		).rejects.toThrow("user-cancel");
+	});
+
+	it("preserves explicit after:/before: bounds when results are empty", async () => {
+		const requestBodies: Record<string, unknown>[] = [];
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			requestBodies.push(JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>);
+			return new Response(JSON.stringify({ results: [] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		const response = await searchKeenable({
+			...makeParams("ai chips after:2026-01-01 before:2026-02-01"),
+			recency: "day",
+			fetch: fetchMock,
+		});
+
+		expect(requestBodies).toEqual([
+			{
+				query: "ai chips",
+				max_results: 10,
+				published_after: "2026-01-01",
+				published_before: "2026-02-01",
+			},
+		]);
+		expect(response.sources).toEqual([]);
+	});
 	it("uses the public search endpoint when no credential is configured", async () => {
 		delete process.env.KEENABLE_API_KEY;
 		let requestUrl = "";
@@ -212,5 +370,19 @@ describe("Keenable web search provider", () => {
 				message: "keenable: 402 credits exhausted",
 			}) satisfies Partial<SearchProviderError>,
 		);
+	});
+
+	it("rejects auto-chain admission without credentials", () => {
+		delete process.env.KEENABLE_API_KEY;
+		expect(new KeenableProvider().isAvailable(fakeAuthStorage)).toBe(false);
+	});
+
+	it("admits the auto chain when KEENABLE_API_KEY is set", () => {
+		expect(new KeenableProvider().isAvailable(fakeAuthStorage)).toBe(true);
+	});
+
+	it("stays explicitly available without credentials for the public pool", () => {
+		delete process.env.KEENABLE_API_KEY;
+		expect(new KeenableProvider().isExplicitlyAvailable(fakeAuthStorage)).toBe(true);
 	});
 });

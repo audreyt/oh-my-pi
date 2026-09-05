@@ -12,6 +12,7 @@ import {
 	seedApiKeyResolver,
 	withAuth,
 } from "@oh-my-pi/pi-ai";
+import { asRecord } from "@oh-my-pi/pi-utils";
 import { keenableAuthHeaders, keenableSearchUrl } from "../../../web/keenable";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
@@ -39,7 +40,7 @@ export interface KeenableSearchParams {
 	published_after?: string;
 	published_before?: string;
 	signal?: AbortSignal;
-	timeoutMs?: number;
+
 	fetch?: FetchImpl;
 }
 
@@ -56,10 +57,6 @@ interface KeenableSearchPayload {
 	results?: unknown;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	return value as Record<string, unknown>;
-}
 
 /** Exported for testing. Builds the Keenable search JSON body. */
 export function buildRequestBody(params: KeenableSearchParams): Record<string, unknown> {
@@ -98,7 +95,7 @@ async function callKeenableSearch(
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(buildRequestBody(params)),
-		signal: withHardTimeout(params.signal, params.timeoutMs),
+		signal: params.signal,
 	});
 	if (!response.ok) {
 		const errorText = await response.text();
@@ -148,22 +145,26 @@ function hasRenderableResponse(response: SearchResponse): boolean {
 /** Execute Keenable web search. */
 export async function searchKeenable(params: SearchParams): Promise<SearchResponse> {
 	const parsed = params.parsedQuery ?? parseSearchQuery(params.query);
+	const signal = withHardTimeout(params.signal, params.timeoutMs);
 	const keenableParams: KeenableSearchParams = {
 		query: params.query,
 		num_results: params.numSearchResults ?? params.limit,
 		recency: params.recency,
-		signal: params.signal,
-		timeoutMs: params.timeoutMs,
+		signal,
 		fetch: params.fetch,
 	};
 	if (parsed.hasDirectives) {
-		const singleSite = parsed.sites.length === 1 ? parsed.sites[0]!.split("/", 1)[0] || undefined : undefined;
-		keenableParams.site = singleSite;
+		// Native `site` is host-only. Strip a bare host only when there are no
+		// exclusions: formatQuery's site capability controls both polarities.
+		// Paths, exclusions, and multiple sites must retain query syntax.
+		const siteValue = parsed.sites.length === 1 ? parsed.sites[0] : undefined;
+		const nativeHost = siteValue?.split("/", 1)[0] || undefined;
+		keenableParams.site = nativeHost;
 		keenableParams.query = formatQuery(parsed, {
 			phrases: true,
 			negation: true,
 			or: true,
-			site: !singleSite,
+			site: !nativeHost || nativeHost !== siteValue || parsed.excludedSites.length > 0,
 			inTitle: true,
 			inUrl: true,
 			filetype: true,
@@ -176,13 +177,13 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 		sessionId: params.sessionId,
 	});
 	const numResults = clampNumResults(keenableParams.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
-	const resolvedKey = await resolveApiKeyOnce(keyResolver, params.signal);
+	const resolvedKey = await resolveApiKeyOnce(keyResolver, signal);
+	const seeded = resolvedKey ? seedApiKeyResolver(resolvedKey, keyResolver) : undefined;
 
 	const call = (searchParams: KeenableSearchParams) => {
-		if (resolvedKey) {
-			const seeded = seedApiKeyResolver(resolvedKey, keyResolver);
+		if (seeded) {
 			return withAuth(seeded, key => callKeenableSearch(key, searchParams), {
-				signal: params.signal,
+				signal,
 			});
 		}
 		return callKeenableSearch(undefined, searchParams);
@@ -190,17 +191,17 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 
 	const authMode = resolvedKey ? "api_key" : "keyless";
 	const response = toSearchResponse(await call(keenableParams), numResults, authMode);
-	const hasTimeFilter = Boolean(
-		keenableParams.recency || keenableParams.published_after || keenableParams.published_before,
-	);
-	if (!hasTimeFilter || hasRenderableResponse(response)) return response;
+	const shouldRelaxRecency =
+		keenableParams.recency !== undefined &&
+		keenableParams.published_after === undefined &&
+		keenableParams.published_before === undefined;
+	if (!shouldRelaxRecency || hasRenderableResponse(response)) return response;
 
 	return toSearchResponse(
 		await call({
 			...keenableParams,
 			recency: undefined,
-			published_after: undefined,
-			published_before: undefined,
+
 		}),
 		numResults,
 		authMode,
