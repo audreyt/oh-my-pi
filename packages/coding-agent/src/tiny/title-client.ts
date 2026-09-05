@@ -817,12 +817,16 @@ export class TinyTitleClient {
 			const completion = completeAfmCore({
 				instructions: systemPrompt?.trim() || TINY_TITLE_SYSTEM_PROMPT,
 				prompt: formatTitleUserMessage(message),
+				maxTokens: TITLE_MAX_NEW_TOKENS,
 			}).then(
 				text => ({ kind: "done", text }) as const,
 				error => ({ kind: "failed", error }) as const,
 			);
 			const outcome = signal ? await Promise.race([completion, abort.promise]) : await completion;
-			if (outcome.kind === "aborted") return null;
+			if (outcome.kind === "aborted") {
+				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+				return null;
+			}
 			if (outcome.kind === "done") {
 				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
 				return extractTinyTitle(outcome.text, message);
