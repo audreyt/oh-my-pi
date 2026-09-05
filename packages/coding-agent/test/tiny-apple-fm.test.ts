@@ -339,6 +339,7 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		const pidPath = path.join(dir, "sidecar.pid");
 		const controller = new AbortController();
+		let pending: Promise<{ ok: boolean; error?: string }> | undefined;
 		try {
 			const sidecar = writeFakeSidecar(
 				dir,
@@ -354,7 +355,7 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 			client.onProgress(event => {
 				if (event.modelKey === "afm-core") events.push(event.status);
 			});
-			const pending = client.downloadModel("afm-core", { signal: controller.signal });
+			pending = client.downloadModel("afm-core", { signal: controller.signal });
 			if (!(await Bun.file(pidPath).exists())) {
 				const { promise, resolve, reject } = Promise.withResolvers<void>();
 				const watcher = fs.watch(dir, () => {
@@ -392,6 +393,7 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 			await expect(client.downloadModel("afm-core")).resolves.toEqual({ ok: true });
 		} finally {
 			controller.abort();
+			await pending?.catch(() => {});
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
