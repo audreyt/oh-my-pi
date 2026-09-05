@@ -831,6 +831,7 @@
 - Report oversized selected lines that cannot fit after read context, with a working raw recovery selector instead of a looping continuation hint ([#10775](https://github.com/can1357/oh-my-pi/issues/10775)).
 - Approved plan content is now inlined into approve-and-execute prompts instead of forcing the executor to re-read the durable plan file ([#10923](https://github.com/can1357/oh-my-pi/issues/10923)).
 - Cancelled `afm-core` title generation and readiness probes now kill the sidecar process instead of leaving it running.
+- `afm-core` now reports `unsupported_os` on macOS earlier than 26 instead of launching a 26-target sidecar that dyld rejects.
 - Fixed WorkPool child sessions crashing during startup while constructing their incremental `yield` tool schema.
 - Commit summaries written in Vietnamese, Korean, and other accented scripts are no longer rejected for exceeding the length limit, and keep their accents as typed.
 - Tool-scoped TTSR rules now match finalized arguments reliably when providers stream short or throttled tool calls ([#10910](https://github.com/can1357/oh-my-pi/issues/10910)).

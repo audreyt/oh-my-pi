@@ -11,6 +11,7 @@ import {
 	foundationModelsUnavailableReason,
 	probeAfmCore,
 	resolveBundledSidecarPath,
+	__internalsForTesting,
 } from "../src/tiny/apple-fm";
 
 const previousSidecar = process.env[AFM_CORE_SIDECAR_ENV];
@@ -57,6 +58,14 @@ describe("afm-core title registry", () => {
 		}
 		process.env[AFM_CORE_SIDECAR_ENV] = "/tmp/does-not-need-to-exist-for-this-check";
 		expect(foundationModelsUnavailableReason(spec)).toBeUndefined();
+	});
+
+	it("treats Darwin kernels before 25 as too old for AFM", () => {
+		const { darwinMeetsAfmRuntime } = __internalsForTesting;
+		expect(darwinMeetsAfmRuntime("linux", "24.6.0")).toBe(false);
+		expect(darwinMeetsAfmRuntime("darwin", "24.6.0")).toBe(false);
+		expect(darwinMeetsAfmRuntime("darwin", "25.0.0")).toBe(true);
+		expect(darwinMeetsAfmRuntime("darwin", "not-a-version")).toBe(false);
 	});
 
 	it("keeps afm-core out of download all even when Darwin-ready", () => {
