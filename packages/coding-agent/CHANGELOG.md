@@ -10,6 +10,10 @@
 
 - Muse Code sessions send a compact hashline edit description (~3 KB less per request); all other models keep the full prompt.
 
+### Fixed
+
+- Keyless image proxies no longer receive a synthetic bearer token; explicitly configured authorization headers are preserved.
+
 ## [18.1.11] - 2026-09-05
 
 ### Added

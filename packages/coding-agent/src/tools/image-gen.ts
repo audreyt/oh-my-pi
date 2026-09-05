@@ -35,7 +35,7 @@ import {
 	USER_AGENT,
 	untilAborted,
 } from "@oh-my-pi/pi-utils";
-import { isAuthenticated, type ModelRegistry } from "../config/model-registry";
+import { isAuthenticated, kNoAuth, type ModelRegistry } from "../config/model-registry";
 import { settings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { resolveXAIHttpCredentials } from "../lib/xai-http";
@@ -478,7 +478,7 @@ async function postImageEndpointRequest(options: {
 			// defaults as object keys would duplicate a caller field spelled
 			// with different casing (fetch coalesces the pair into one
 			// comma-joined value).
-			setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
+			if (key !== kNoAuth) setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
 			setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
 			setHeaderIfAbsent(headers, "Content-Type", "application/json");
 			const resp = await options.fetchImpl(options.url, {

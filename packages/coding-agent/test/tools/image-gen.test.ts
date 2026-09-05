@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import type { Model } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import { kNoAuth, type ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import type { CustomToolContext } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 import type { ReadonlySessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import {
@@ -1194,7 +1194,19 @@ describe("imageGenTool", () => {
 		expect(result.details?.provider).toBe("meta");
 	});
 
-	it("lets a configured Meta Authorization header win over the generated bearer", async () => {
+	it.each([
+		{
+			name: "preserves configured Meta authorization",
+			key: "test-meta-key",
+			authorization: "Bearer proxy-credential",
+		},
+		{ name: "omits generated authorization for keyless Meta proxies", key: kNoAuth, authorization: undefined },
+		{
+			name: "preserves explicit authorization for keyless Meta proxies",
+			key: kNoAuth,
+			authorization: "Bearer proxy-credential",
+		},
+	])("$name", async ({ key, authorization }) => {
 		let requestHeaders: Headers | undefined;
 
 		const fetchMock: typeof fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -1212,13 +1224,13 @@ describe("imageGenTool", () => {
 				getSessionId: () => "test-session",
 			} as unknown as ReadonlySessionManager,
 			modelRegistry: {
-				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
+				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? key : undefined),
 				getProviderBaseUrl: () => undefined,
 				getProviderHeaders: (provider: string) =>
-					provider === "meta" ? { Authorization: "Bearer proxy-credential" } : undefined,
+					provider === "meta" && authorization ? { Authorization: authorization } : undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
-				resolver: () => async () => "test-meta-key",
+				resolver: () => async () => key,
 			} as unknown as ModelRegistry,
 			model: undefined,
 			isIdle: () => true,
@@ -1234,7 +1246,7 @@ describe("imageGenTool", () => {
 		);
 		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
 
-		expect(requestHeaders?.get("authorization")).toBe("Bearer proxy-credential");
+		expect(requestHeaders?.get("authorization")).toBe(authorization ?? null);
 		expect(result.details?.provider).toBe("meta");
 	});
 
