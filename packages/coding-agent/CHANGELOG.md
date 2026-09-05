@@ -2,9 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Muse Code sessions send a compact hashline edit description (~3 KB less per request); all other models keep the full prompt.
+
 ### Added
 
 - Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939)).
+
 
 ## [18.1.11] - 2026-09-05
 
