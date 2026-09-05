@@ -289,15 +289,18 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 		}
 	});
 
-	it("treats empty sidecar text as request-scoped", async () => {
+	it.each([
+		{
+			name: "empty sidecar text",
+			script: bunSidecar('process.stdout.write(JSON.stringify({ text: "   " }) + "\\n");'),
+		},
+		{ name: "malformed sidecar JSON", script: bunSidecar('process.stdout.write("{invalid}\\n");') },
+		{ name: "a killed sidecar", script: bunSidecar('process.kill(process.pid, "SIGKILL");') },
+		{ name: "a failed sidecar spawn", script: "#!/nonexistent/omp-afm-test-interpreter\n" },
+	])("recovers after $name without disabling AFM", async ({ script }) => {
 		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = await writeFakeSidecar(
-				dir,
-				bunSidecar(`
-process.stdout.write(JSON.stringify({ text: "   " }) + "\\n");
-`),
-			);
+			const sidecar = await writeFakeSidecar(dir, script);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
 			const client = new TinyTitleClient();
 			const events: string[] = [];

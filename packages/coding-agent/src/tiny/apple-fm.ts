@@ -102,7 +102,7 @@ export function isAfmModelNotReady(error: unknown): boolean {
 	return /\bmodelNotReady\b/.test(text);
 }
 
-/** Prompt/guardrail failures must not disable AFM for later titles. */
+/** Only explicit permanent availability reports disable AFM for later titles. */
 const AFM_TERMINAL_AVAILABILITY: Record<string, true> = {
 	deviceNotEligible: true,
 	appleIntelligenceNotEnabled: true,
@@ -112,12 +112,8 @@ const AFM_TERMINAL_AVAILABILITY: Record<string, true> = {
 
 export function isAfmRequestScopedFailure(error: unknown): boolean {
 	const text = error instanceof Error ? error.message : String(error);
-	if (isAfmModelNotReady(error)) return true;
-	if (/Apple Foundation Models sidecar returned empty text/.test(text)) return true;
-	if (/\bapple_fm_busy\b/.test(text)) return true;
-	if (!/\bapple_fm_failed\b/.test(text)) return false;
-	const sep = text.indexOf(": ");
-	const reason = sep === -1 ? text : text.slice(sep + 2);
+	const prefix = "apple_fm_failed: ";
+	const reason = text.startsWith(prefix) ? text.slice(prefix.length) : text;
 	return AFM_TERMINAL_AVAILABILITY[reason] !== true;
 }
 
