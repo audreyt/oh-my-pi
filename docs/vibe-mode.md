@@ -1,6 +1,6 @@
 # Vibe mode
 
-Vibe mode turns the top-level interactive session into a **director** for persistent background worker sessions instead of letting it edit or execute commands itself. The director's active tools are reduced to `read`, `ask` when built in and enabled in the parent session, optional parent-owned `todo`, and five worker-control tools. Workers do the searching, editing, running, and building; the director verifies their claims by reading touched files. `ask` requests a decision from the user, while `todo` belongs only to the parent director.
+Vibe mode turns the top-level interactive session into a **director** for persistent background worker sessions instead of letting it edit or execute commands itself. The director's active tools are reduced to `read`, an optional `ask`, an optional parent-owned `todo`, and five worker-control tools. Workers do the searching, editing, running, and building; the director verifies their claims by reading touched files. When `ask` is available it requests a decision from the user, while `todo` belongs only to the parent director. See [Director-only tools](#director-only-tools) for exactly when each one is present.
 
 ## Enabling and disabling
 
@@ -12,7 +12,7 @@ Toggle it with the `/vibe` slash command:
 /vibe                 # run again to exit
 ```
 
-- Entering activates a parent-session worker scope, installs the vibe tools, reduces the active toolset to `read`, `ask` when built in and enabled on entry, and parent-owned `todo`, plus the vibe tools, and injects the director instructions.
+- Entering activates a parent-session worker scope, installs the vibe tools, reduces the active toolset to `read` plus the vibe tools, and injects the director instructions. An optional `ask` and an optional parent-owned `todo` are kept when they qualify.
 - An inline prompt (`/vibe <prompt>`) enters the mode and submits that prompt as the first directive.
 - Exiting restores the prior toolset, cancels in-flight worker turns, kills every worker session in the scope, and persists terminal lifecycle records. A worker never outlives an intentional mode exit.
 - Vibe mode is mutually exclusive with both active **and paused** plan/goal modes; exit those modes first.
@@ -34,7 +34,7 @@ The tier always selects the bundled `sonic` or `task` definition, not a same-nam
 
 ## Director-only tools
 
-`ask` is available when the session has an interactive UI and `ask.enabled` is on. It asks the **user** for a decision; it is not a worker-control action and is not a substitute for delegating investigation or execution. In headless sessions, the tool is not registered and is therefore omitted from the director toolset.
+`ask` is kept in the director toolset only when the session owns the built-in tool — an interactive UI with `ask.enabled` on — **and** `ask` was still in the enabled toolset when you entered the mode. Entering never re-grants an `ask` you had turned off via `/tools`, and exiting restores the exact prior toolset. It asks the **user** for a decision; it is not a worker-control action and is not a substitute for delegating investigation or execution. In headless sessions, the tool is not registered and is therefore omitted from the director toolset.
 
 When `todo.enabled` is on, `todo` remains available for the parent director's workstream bookkeeping. Workers keep their own task state.
 

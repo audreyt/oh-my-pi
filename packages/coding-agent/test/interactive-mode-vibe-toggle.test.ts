@@ -2,8 +2,9 @@
  * Contracts: /vibe mode toggle on InteractiveMode.
  *
  * 1. Vibe tools do not exist in the session registry before the mode is entered.
- * 2. Entering registers and activates exactly `read`, UI-only `ask`,
- *    parent-owned `todo`, plus the vibe tools.
+ * 2. Entering registers and activates exactly `read`, parent-owned `todo`, and
+ *    the vibe tools, plus `ask` only when the session owns the built-in tool
+ *    and `ask` was in the previous enabled toolset.
  * 3. Exiting unregisters the vibe tools and restores the pre-vibe active toolset
  *    exactly, including the legitimate empty set.
  */
@@ -174,7 +175,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 		expect(content).toContain("`todo`");
 		expect(content).toContain("`ask`");
 
-		// Toggle off: the empty previous toolset must come back — only the
+		// Toggle off: the exact pre-vibe toolset must come back — only the
 		// ephemeral vibe tools must leave the registry.
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(false);
