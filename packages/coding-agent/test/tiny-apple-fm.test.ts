@@ -292,7 +292,7 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
 			const spy = spyOn(appleFm, "completeAfmCore").mockRejectedValue(
-				new Error("Failed to acquire lock for /tmp/omp-apple-fm after 120 attempts"),
+				new Error("apple_fm_busy: sidecar install lock"),
 			);
 			try {
 				const client = new TinyTitleClient();

@@ -114,13 +114,24 @@ export function isAfmRequestScopedFailure(error: unknown): boolean {
 	const text = error instanceof Error ? error.message : String(error);
 	if (isAfmModelNotReady(error)) return true;
 	if (/Apple Foundation Models sidecar returned empty text/.test(text)) return true;
-	// Another omp can hold the first-use compile lock for up to ~30s. Timing
-	// out there is not an availability verdict — retry the next title.
-	if (/Failed to acquire lock for /.test(text)) return true;
+	if (/\bapple_fm_busy\b/.test(text)) return true;
 	if (!/\bapple_fm_failed\b/.test(text)) return false;
 	const sep = text.indexOf(": ");
 	const reason = sep === -1 ? text : text.slice(sep + 2);
 	return AFM_TERMINAL_AVAILABILITY[reason] !== true;
+}
+
+function isAbortError(error: unknown): boolean {
+	return error instanceof Error && error.name === "AbortError";
+}
+
+function mapSidecarInstallError(error: unknown): unknown {
+	if (isAbortError(error)) return error;
+	const text = error instanceof Error ? error.message : String(error);
+	if (text.startsWith("Failed to acquire lock for ")) {
+		return new Error("apple_fm_busy: sidecar install lock");
+	}
+	return error;
 }
 
 function sidecarCacheDir(): string {
@@ -215,44 +226,48 @@ export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
 	const binFile = Bun.file(binPath);
 	const stampFile = Bun.file(stampPath);
 
-	return await withFileLock(
-		binPath,
-		async () => {
-			throwIfAborted(signal);
-			if ((await binFile.exists()) && (await stampFile.exists())) return binPath;
-			const bundled = await bundledSidecarPath();
-			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${hash}.tmp`);
-			try {
-				if (bundled) {
-					await publishSidecar(bundled, binPath);
-				} else {
-					await Bun.write(srcPath, sidecarSource);
-					await compileSidecar(srcPath, tmpPath, signal);
-					await fs.promises.rename(tmpPath, binPath);
-				}
-			} catch (error) {
-				await fs.promises.rm(tmpPath, { force: true });
-				if (!bundled) {
-					throw new Error(
-						`${error instanceof Error ? error.message : String(error)}. afm-core needs the bundled Apple Silicon sidecar or Xcode/CLT to compile one.`,
-					);
-				}
-				throw error;
-			}
-			try {
-				for await (const entry of new Bun.Glob("omp-apple-fm.*").scan({ cwd: dir, onlyFiles: true })) {
-					if (entry !== `omp-apple-fm.${hash}` && !entry.endsWith(".tmp") && !entry.endsWith(".lock")) {
-						await fs.promises.rm(path.join(dir, entry), { force: true });
+	try {
+		return await withFileLock(
+			binPath,
+			async () => {
+				throwIfAborted(signal);
+				if ((await binFile.exists()) && (await stampFile.exists())) return binPath;
+				const bundled = await bundledSidecarPath();
+				const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${hash}.tmp`);
+				try {
+					if (bundled) {
+						await publishSidecar(bundled, binPath);
+					} else {
+						await Bun.write(srcPath, sidecarSource);
+						await compileSidecar(srcPath, tmpPath, signal);
+						await fs.promises.rename(tmpPath, binPath);
 					}
+				} catch (error) {
+					await fs.promises.rm(tmpPath, { force: true });
+					if (!bundled) {
+						throw new Error(
+							`${error instanceof Error ? error.message : String(error)}. afm-core needs the bundled Apple Silicon sidecar or Xcode/CLT to compile one.`,
+						);
+					}
+					throw error;
 				}
-			} catch {
-				// Cache cleanup is best-effort.
-			}
-			await Bun.write(stampPath, `${hash}\n`);
-			return binPath;
-		},
-		{ retries: 120, retryDelayMs: 250, signal },
-	);
+				try {
+					for await (const entry of new Bun.Glob("omp-apple-fm.*").scan({ cwd: dir, onlyFiles: true })) {
+						if (entry !== `omp-apple-fm.${hash}` && !entry.endsWith(".tmp") && !entry.endsWith(".lock")) {
+							await fs.promises.rm(path.join(dir, entry), { force: true });
+						}
+					}
+				} catch {
+					// Cache cleanup is best-effort.
+				}
+				await Bun.write(stampPath, `${hash}\n`);
+				return binPath;
+			},
+			{ retries: 120, retryDelayMs: 250, signal },
+		);
+	} catch (error) {
+		throw mapSidecarInstallError(error);
+	}
 }
 
 async function runSidecar(args: string[], stdin?: string, signal?: AbortSignal): Promise<SidecarPayload> {
