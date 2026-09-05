@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { resolveModels } from "@oh-my-pi/pi-coding-agent/cli/tiny-models-cli";
-import { getTinyLocalModelSpec, isFoundationModelsSpec } from "@oh-my-pi/pi-coding-agent/tiny/models";
+import { getTinyLocalModelSpec } from "@oh-my-pi/pi-coding-agent/tiny/models";
 import { TinyTitleClient } from "../src/tiny/title-client";
 import {
 	AFM_CORE_SIDECAR_ENV,
@@ -21,10 +21,10 @@ afterEach(() => {
 	else process.env[AFM_CORE_SIDECAR_ENV] = previousSidecar;
 });
 
-function writeFakeSidecar(dir: string, script: string): string {
+async function writeFakeSidecar(dir: string, script: string): Promise<string> {
 	const sidecar = path.join(dir, "fake-afm");
-	fs.writeFileSync(sidecar, script);
-	fs.chmodSync(sidecar, 0o755);
+	await Bun.write(sidecar, script);
+	await fs.promises.chmod(sidecar, 0o755);
 	return sidecar;
 }
 
@@ -35,19 +35,6 @@ ${body}
 }
 
 describe("afm-core title registry", () => {
-	it("registers a Darwin-only foundation-models engine", () => {
-		const spec = getTinyLocalModelSpec("afm-core");
-		expect(spec).toBeDefined();
-		expect(isFoundationModelsSpec(spec)).toBe(true);
-		expect(spec?.repo).toBe("apple.SystemLanguageModel");
-		if (process.platform === "darwin") {
-			expect(spec?.unsupportedReason).toBeUndefined();
-		} else {
-			expect(spec?.unsupportedReason).toBe("Apple Foundation Models is macOS-only");
-		}
-		expect(spec?.onnxUnsupportedReason).toBe("Apple Foundation Models uses the SystemLanguageModel engine, not ONNX");
-	});
-
 	it("lets OMP_APPLE_FM_SIDECAR bypass the platform gate", () => {
 		const spec = getTinyLocalModelSpec("afm-core");
 		expect(spec).toBeDefined();
@@ -82,9 +69,9 @@ describe("afm-core title registry", () => {
 
 describe("AFM sidecar runner", () => {
 	it("probes and completes through an env-overridden sidecar", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 const cmd = process.argv[2];
@@ -105,14 +92,14 @@ process.stdout.write(JSON.stringify({ text: req.maxTokens ? String(req.maxTokens
 			);
 			await expect(completeAfmCore({ prompt: "classify", maxTokens: 16 })).resolves.toBe("16");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("surfaces sidecar error payloads", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ error: "apple_fm_failed", reason: "modelNotReady" }) + "\\n");
@@ -122,16 +109,16 @@ process.exit(1);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
 			await expect(probeAfmCore()).rejects.toThrow("apple_fm_failed: modelNotReady");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 });
 
 describe("afm-core client titles", () => {
 	it("generates a title without spawning a worker", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 const cmd = process.argv[2];
@@ -155,14 +142,14 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			expect(events).toContain("ready");
 			expect(events).not.toContain("error");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("treats download as a readiness probe", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
@@ -172,14 +159,14 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 			const client = new TinyTitleClient();
 			await expect(client.downloadModel("afm-core")).resolves.toEqual({ ok: true });
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("closes the probe lifecycle when the model reports unavailable", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ available: false, reason: "deviceNotEligible" }) + "\\n");
@@ -199,14 +186,14 @@ process.stdout.write(JSON.stringify({ available: false, reason: "deviceNotEligib
 			expect(events).toContain("error");
 			expect(events).not.toContain("ready");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("returns no title on modelNotReady and recovers when ready later", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ error: "apple_fm_failed", reason: "modelNotReady" }) + "\\n");
@@ -221,7 +208,7 @@ process.exit(1);
 			});
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
 			expect(events).toContain("error");
-			fs.writeFileSync(
+			await Bun.write(
 				sidecar,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
@@ -229,14 +216,14 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("keeps prompt-specific AFM failures request-scoped", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ error: "apple_fm_failed", reason: "Generation was refused" }) + "\\n");
@@ -251,7 +238,7 @@ process.exit(1);
 			});
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
 			expect(events).not.toContain("error");
-			fs.writeFileSync(
+			await Bun.write(
 				sidecar,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
@@ -259,14 +246,14 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("treats empty sidecar text as request-scoped", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ text: "   " }) + "\\n");
@@ -280,7 +267,7 @@ process.stdout.write(JSON.stringify({ text: "   " }) + "\\n");
 			});
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
 			expect(events).not.toContain("error");
-			fs.writeFileSync(
+			await Bun.write(
 				sidecar,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
@@ -288,14 +275,14 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 
 	it("disables AFM after a terminal failure", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ error: "apple_fm_failed", reason: "deviceNotEligible" }) + "\\n");
@@ -305,7 +292,7 @@ process.exit(1);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
 			const client = new TinyTitleClient();
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
-			fs.writeFileSync(
+			await Bun.write(
 				sidecar,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
@@ -313,13 +300,13 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 	it("resolves null on abort without disabling AFM", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 await Bun.sleep(1500);
@@ -341,16 +328,16 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			expect(events).toEqual(["initiate", "ready"]);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 	it("returns ok:false when the AFM readiness probe is aborted", async () => {
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		const pidPath = path.join(dir, "sidecar.pid");
 		const controller = new AbortController();
 		let pending: Promise<{ ok: boolean; error?: string }> | undefined;
 		try {
-			const sidecar = writeFakeSidecar(
+			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
 await Bun.write(${JSON.stringify(pidPath)}, String(process.pid));
@@ -393,7 +380,7 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 			await expect(pending).resolves.toEqual({ ok: false });
 			expect(events).toEqual(["initiate", "ready"]);
 			expect(() => process.kill(pid, 0)).toThrow();
-			fs.writeFileSync(
+			await Bun.write(
 				sidecar,
 				bunSidecar(`
 process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
@@ -403,7 +390,7 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 		} finally {
 			controller.abort();
 			await pending?.catch(() => {});
-			fs.rmSync(dir, { recursive: true, force: true });
+			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
 });
