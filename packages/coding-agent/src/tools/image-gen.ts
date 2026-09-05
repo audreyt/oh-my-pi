@@ -21,7 +21,7 @@ import {
 	OPENAI_HEADERS,
 	URL_PATHS,
 } from "@oh-my-pi/pi-catalog/wire/codex";
-import { hostedDefaultModel } from "@oh-my-pi/pi-catalog/compat/behavior";
+import { hostedDefaultModel, imageProviderFor } from "@oh-my-pi/pi-catalog/compat/behavior";
 import { META_MODEL_API_BASE_URL } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
 import {
@@ -760,26 +760,9 @@ async function findCodexSubscriptionImageCredentials(
 }
 
 function activeImageProvider(model: Model | undefined): Exclude<ImageProviderPreference, "auto"> | null {
-	switch (model?.provider) {
-		case "openai":
-		case "openai-codex":
-			return "openai";
-		case "google-antigravity":
-			return "antigravity";
-		case "xai":
-		case "xai-oauth":
-			return "xai";
-		case "openrouter":
-			return "openrouter";
-		case "deepinfra":
-			return "deepinfra";
-		case "meta":
-			return "meta";
-		case "google":
-			return "gemini";
-		default:
-			return null;
-	}
+	if (!model?.provider) return null;
+	const backend = imageProviderFor(model.provider);
+	return isImageProviderId(backend) ? backend : null;
 }
 
 function imageProviderOrder(activeModel: Model | undefined, requested?: ImageProviderPreference): ImageProvider[] {

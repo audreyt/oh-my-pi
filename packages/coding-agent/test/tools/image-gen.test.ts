@@ -58,6 +58,54 @@ function createAntigravityXAIContext(model: Model | undefined, fetchMock: typeof
 	};
 }
 
+function createMetaXaiContext(model: Model | undefined, fetchMock: typeof fetch): CustomToolContext {
+	return {
+		fetch: fetchMock,
+		sessionManager: {
+			getCwd: () => "/tmp",
+			getSessionId: () => "test-session",
+		} as unknown as ReadonlySessionManager,
+		modelRegistry: {
+			getApiKeyForProvider: async (provider: string) => {
+				if (provider === "meta") return "test-meta-key";
+				if (provider === "xai-oauth") return "test-xai-token";
+				return undefined;
+			},
+			getProviderBaseUrl: () => undefined,
+			getAll: () => [],
+			authStorage: {
+				hasNonEnvCredential: (provider: string) => provider === "xai-oauth",
+				rotateSessionCredential: async () => false,
+			},
+			resolver: (provider: string) => async () => (provider === "meta" ? "test-meta-key" : "test-xai-token"),
+		} as unknown as ModelRegistry,
+		model,
+		isIdle: () => true,
+		hasQueuedMessages: () => false,
+		abort: () => {},
+	};
+}
+
+function competingMetaXaiFetch(requestUrls: string[]): typeof fetch {
+	return (async (input: string | URL | Request) => {
+		const url = input.toString();
+		requestUrls.push(url);
+		if (url.startsWith("https://api.meta.ai/")) {
+			return new Response(
+				JSON.stringify({ data: [{ b64_json: Buffer.from("active-meta-image").toString("base64") }] }),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}
+		if (url.startsWith("https://api.x.ai/")) {
+			return new Response(
+				JSON.stringify({ data: [{ b64_json: Buffer.from("active-xai-image").toString("base64") }] }),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}
+		throw new Error(`Unexpected provider request: ${url}`);
+	}) as unknown as typeof fetch;
+}
+
 describe("imageGenTool", () => {
 	it("registers without resolving image provider credentials", async () => {
 		const modelRegistry = {
@@ -1302,5 +1350,59 @@ describe("imageGenTool", () => {
 		// into "application/json, application/json".
 		expect(requestHeaders?.get("content-type")).toBe("application/json");
 		expect(result.details?.provider).toBe("meta");
+	});
+
+	it("prefers the active Meta provider over unrelated credentialed providers", async () => {
+		const requestUrls: string[] = [];
+		const model = {
+			api: "openai-responses",
+			provider: "meta",
+			id: "muse-spark-1.3",
+			name: "Muse Spark",
+			baseUrl: "https://api.meta.ai/v1",
+		} as Model;
+		const ctx = createMetaXaiContext(model, competingMetaXaiFetch(requestUrls));
+
+		const result = await imageGenTool.execute("call-active-meta", { subject: "a cat" }, undefined, ctx);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestUrls).toEqual(["https://api.meta.ai/v1/images/generations"]);
+		expect(result.details?.provider).toBe("meta");
+	});
+
+	it("honors configured imageOrder over the active Meta provider", async () => {
+		setImageProviderOrder(["xai"]);
+		const requestUrls: string[] = [];
+		const model = {
+			api: "openai-responses",
+			provider: "meta",
+			id: "muse-spark-1.3",
+			name: "Muse Spark",
+			baseUrl: "https://api.meta.ai/v1",
+		} as Model;
+		const ctx = createMetaXaiContext(model, competingMetaXaiFetch(requestUrls));
+
+		const result = await imageGenTool.execute("call-order-over-meta", { subject: "a cat" }, undefined, ctx);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestUrls).toEqual(["https://api.x.ai/v1/images/generations"]);
+		expect(result.details?.provider).toBe("xai");
+	});
+
+	it("does not select Meta for an unknown active chat provider", async () => {
+		const requestUrls: string[] = [];
+		const model = {
+			api: "anthropic-messages",
+			provider: "anthropic",
+			id: "claude-opus-4",
+			name: "Claude",
+		} as Model;
+		const ctx = createMetaXaiContext(model, competingMetaXaiFetch(requestUrls));
+
+		const result = await imageGenTool.execute("call-unknown-active", { subject: "a cat" }, undefined, ctx);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestUrls).toEqual(["https://api.x.ai/v1/images/generations"]);
+		expect(result.details?.provider).toBe("xai");
 	});
 });

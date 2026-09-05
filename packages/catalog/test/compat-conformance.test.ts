@@ -52,6 +52,7 @@ function collectReferencedProviders(): Map<string, string> {
 		behavior.modelOperations,
 		behavior.quotaTiers,
 		behavior.hostedDefaults,
+		behavior.imageProviders,
 		behavior.apiRoutes,
 		behavior.modelLimits,
 		behavior.excludeModels,
