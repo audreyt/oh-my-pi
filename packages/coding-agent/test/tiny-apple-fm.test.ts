@@ -259,6 +259,36 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 		}
 	});
 
+	it("recovers after a generation failure whose description mentions unavailability", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = await writeFakeSidecar(
+				dir,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ error: "apple_fm_failed", reason: "The model assets are currently unavailable" }) + "\\n");
+process.exit(1);
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+			expect(events).not.toContain("error");
+			await Bun.write(
+				sidecar,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
+`),
+			);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("treats empty sidecar text as request-scoped", async () => {
 		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
