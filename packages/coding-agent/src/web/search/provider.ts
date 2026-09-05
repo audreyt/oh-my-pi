@@ -1,12 +1,10 @@
 // Lazy registry of web search providers.
 //
-// Each provider is loaded on first use; importing this module loads zero
-// provider implementations. Provider modules are heavy (each pulls in
-// fetch/parse/format helpers) and only one — at most — is needed per session,
-// so eager construction was wasted work at startup.
-//
-// Provider modules are loaded lazily; display metadata lives in types.ts so UI
-// listings can share it without importing provider implementations.
+// Most providers load on first use; Keenable is imported at module scope
+// because repository convention forbids new dynamic imports. Importing this
+// module therefore loads the Keenable implementation eagerly. Other provider
+// modules stay lazy. Display metadata lives in types.ts so UI listings can
+// share it without importing those remaining implementations.
 
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
 import type { SearchProvider } from "./providers/base";
@@ -23,7 +21,7 @@ interface ProviderMeta {
 	load: () => Promise<SearchProvider>;
 }
 
-/** Lazy factories. Each `load()` dynamic-imports its provider module on first call. */
+/** Lazy factories. Most `load()` dynamic-imports; keenable uses the top-level import. */
 const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 	perplexity: {
 		id: "perplexity",
