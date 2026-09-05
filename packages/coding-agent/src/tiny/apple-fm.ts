@@ -212,13 +212,14 @@ export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
 	const srcPath = path.join(dir, "sidecar.swift");
 	const binPath = path.join(dir, "omp-apple-fm");
 	const stampPath = path.join(dir, `omp-apple-fm.${hash}`);
-	if ((await Bun.file(binPath).exists()) && (await Bun.file(stampPath).exists())) return binPath;
+	const binFile = Bun.file(binPath);
+	const stampFile = Bun.file(stampPath);
 
 	return await withFileLock(
 		binPath,
 		async () => {
 			throwIfAborted(signal);
-			if ((await Bun.file(binPath).exists()) && (await Bun.file(stampPath).exists())) return binPath;
+			if ((await binFile.exists()) && (await stampFile.exists())) return binPath;
 			const bundled = await bundledSidecarPath();
 			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${hash}.tmp`);
 			try {
