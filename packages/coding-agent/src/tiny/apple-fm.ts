@@ -109,6 +109,9 @@ export function isAfmRequestScopedFailure(error: unknown): boolean {
 	const text = error instanceof Error ? error.message : String(error);
 	if (isAfmModelNotReady(error)) return true;
 	if (/Apple Foundation Models sidecar returned empty text/.test(text)) return true;
+	// Another omp can hold the first-use compile lock for up to ~30s. Timing
+	// out there is not an availability verdict — retry the next title.
+	if (/Failed to acquire lock for /.test(text)) return true;
 	if (!/\bapple_fm_failed\b/.test(text)) return false;
 	return !AFM_TERMINAL_AVAILABILITY.test(text);
 }
