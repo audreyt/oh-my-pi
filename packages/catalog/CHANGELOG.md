@@ -12,6 +12,7 @@
 ### Fixed
 
 - Existing model caches no longer hide Muse Spark 1.3's new `max` thinking effort after upgrading.
+- Vercel's Muse Spark Anthropic route retains its supported thinking ladder instead of offering a duplicate `max` budget.
 
 ## [18.1.9] - 2026-09-04
 

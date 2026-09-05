@@ -428,6 +428,20 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		expect(spark12.thinking?.efforts).not.toContain(Effort.Max);
 	});
 
+	it("does not advertise a duplicate max budget on Vercel's Muse route", () => {
+		const model = buildModel({
+			...completionsSpec({
+				id: "meta/muse-spark-1.3",
+				provider: "vercel-ai-gateway",
+				reasoning: true,
+			}),
+			api: "anthropic-messages",
+		});
+		expect(model.thinking?.mode).toBe("budget");
+		expect(model.thinking?.efforts).toContain(Effort.XHigh);
+		expect(model.thinking?.efforts).not.toContain(Effort.Max);
+	});
+
 	it("lets an explicit compat.supportsReasoningEffort override the allowlist default", () => {
 		const compat = resolveModelPolicy({
 			...grokResponsesSpec("grok-build"),
