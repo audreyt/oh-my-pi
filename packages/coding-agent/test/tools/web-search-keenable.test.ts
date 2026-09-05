@@ -238,6 +238,58 @@ describe("Keenable web search provider", () => {
 		]);
 	});
 
+	it("expires the recency fallback at the original deadline", async () => {
+		const deadlines: AbortController[] = [];
+		vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+			const deadline = new AbortController();
+			deadlines.push(deadline);
+			return deadline.signal;
+		});
+		let attempts = 0;
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			if (++attempts === 1) {
+				return Response.json({ results: [] });
+			}
+			deadlines[0]!.abort(new DOMException("Search deadline expired", "TimeoutError"));
+			init?.signal?.throwIfAborted();
+			return Response.json({ results: [{ title: "Too late", url: "https://example.com/late" }] });
+		};
+		await expect(
+			searchKeenable({
+				...makeParams("ai chips"),
+				recency: "day",
+				timeoutMs: 1_000,
+				fetch: fetchMock,
+			}),
+		).rejects.toThrow("Search deadline expired");
+	});
+
+	it("propagates caller abort through the shared recency-fallback deadline", async () => {
+		const ac = new AbortController();
+		const signals: AbortSignal[] = [];
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			signals.push(init?.signal as AbortSignal);
+			if (signals.length === 1) {
+				return new Response(JSON.stringify({ results: [] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+			ac.abort(new Error("user-cancel"));
+			throw init?.signal?.reason ?? new DOMException("Aborted", "AbortError");
+		};
+
+		await expect(
+			searchKeenable({
+				...makeParams("ai chips"),
+				recency: "day",
+				signal: ac.signal,
+				timeoutMs: 60_000,
+				fetch: fetchMock,
+			}),
+		).rejects.toThrow("user-cancel");
+	});
+
 	it("preserves explicit after:/before: bounds when results are empty", async () => {
 		const requestBodies: Record<string, unknown>[] = [];
 		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {

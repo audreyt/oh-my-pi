@@ -40,7 +40,6 @@ export interface KeenableSearchParams {
 	published_after?: string;
 	published_before?: string;
 	signal?: AbortSignal;
-	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -94,7 +93,7 @@ async function callKeenableSearch(
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(buildRequestBody(params)),
-		signal: withHardTimeout(params.signal, params.timeoutMs),
+		signal: params.signal,
 	});
 	if (!response.ok) {
 		const errorText = await response.text();
@@ -144,12 +143,12 @@ function hasRenderableResponse(response: SearchResponse): boolean {
 /** Execute Keenable web search. */
 export async function searchKeenable(params: SearchParams): Promise<SearchResponse> {
 	const parsed = params.parsedQuery ?? parseSearchQuery(params.query);
+	const signal = withHardTimeout(params.signal, params.timeoutMs);
 	const keenableParams: KeenableSearchParams = {
 		query: params.query,
 		num_results: params.numSearchResults ?? params.limit,
 		recency: params.recency,
-		signal: params.signal,
-		timeoutMs: params.timeoutMs,
+		signal,
 		fetch: params.fetch,
 	};
 	if (parsed.hasDirectives) {
@@ -176,13 +175,13 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 		sessionId: params.sessionId,
 	});
 	const numResults = clampNumResults(keenableParams.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
-	const resolvedKey = await resolveApiKeyOnce(keyResolver, params.signal);
+	const resolvedKey = await resolveApiKeyOnce(keyResolver, signal);
 
 	const call = (searchParams: KeenableSearchParams) => {
 		if (resolvedKey) {
 			const seeded = seedApiKeyResolver(resolvedKey, keyResolver);
 			return withAuth(seeded, key => callKeenableSearch(key, searchParams), {
-				signal: params.signal,
+				signal,
 			});
 		}
 		return callKeenableSearch(undefined, searchParams);
