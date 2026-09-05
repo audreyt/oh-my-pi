@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 
 ### Fixed
@@ -82,11 +83,6 @@
 
 ### Added
 
-- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
-- Video files can be attached or read through system ffmpeg as preview grids with metadata; use `:412` or `:1h5m42s` to inspect individual frames.
-- The model picker now shows a brain-icon intelligence column and uses catalog TPS as an estimate until local performance data exists.
-- Added `report` field to scout agent definitions for detailed, non-summarized findings
-- Subagents now automatically relay turn results to the originating agent, enabling read-only agents to return data
 - Added asynchronous eval agent and completion handles with status, cancellation, messaging, waiting, and automatic result delivery for unwaited background work.
 - Added eval workpools for queueing items onto the least context-loaded keep-alive subagent with configurable concurrency; the pool name is its async-job ID for `hub wait`, `.peek()` gives a non-consuming snapshot, per-item `{key, data|error}` yields finish batches incrementally, and `eval.workpool.freshAgents` opts into a new agent per item.
 - Added support for defining eval tools in Python with @tool or JavaScript with tool(fn, schema), and exposing them to subagents through task, agent, and workpool calls. Configure availability with eval.tools.enabled.
