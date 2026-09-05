@@ -176,10 +176,10 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 	});
 	const numResults = clampNumResults(keenableParams.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
 	const resolvedKey = await resolveApiKeyOnce(keyResolver, signal);
+	const seeded = resolvedKey ? seedApiKeyResolver(resolvedKey, keyResolver) : undefined;
 
 	const call = (searchParams: KeenableSearchParams) => {
-		if (resolvedKey) {
-			const seeded = seedApiKeyResolver(resolvedKey, keyResolver);
+		if (seeded) {
 			return withAuth(seeded, key => callKeenableSearch(key, searchParams), {
 				signal,
 			});
