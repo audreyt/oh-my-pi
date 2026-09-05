@@ -12,6 +12,7 @@ import {
 	seedApiKeyResolver,
 	withAuth,
 } from "@oh-my-pi/pi-ai";
+import { asRecord } from "@oh-my-pi/pi-utils";
 import { keenableAuthHeaders, keenableSearchUrl } from "../../../web/keenable";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
@@ -54,11 +55,6 @@ interface KeenableSearchHit {
 interface KeenableSearchPayload {
 	query?: unknown;
 	results?: unknown;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	return value as Record<string, unknown>;
 }
 
 /** Exported for testing. Builds the Keenable search JSON body. */
