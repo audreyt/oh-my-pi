@@ -1,6 +1,8 @@
+// Subpath import: cli.ts reaches this module through the smoke probe, and the
+// pi-utils barrel would pull native addons into normal CLI startup.
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { $which } from "@oh-my-pi/pi-utils";
+import { $which } from "@oh-my-pi/pi-utils/which";
 
 const MINIMUM_SPEECH_SDK_MAJOR = 26;
 let toolchainAvailability: Promise<boolean> | null = null;
