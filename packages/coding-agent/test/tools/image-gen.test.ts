@@ -1237,4 +1237,48 @@ describe("imageGenTool", () => {
 		expect(requestHeaders?.get("authorization")).toBe("Bearer proxy-credential");
 		expect(result.details?.provider).toBe("meta");
 	});
+
+	it("lets a lowercase Meta authorization header win over the generated bearer", async () => {
+		let requestHeaders: Headers | undefined;
+
+		const fetchMock: typeof fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+			requestHeaders = new Headers(init?.headers);
+			return new Response(
+				JSON.stringify({ data: [{ b64_json: Buffer.from("fake-meta-image").toString("base64"), url: null }] }),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}) as unknown as typeof fetch;
+
+		const ctx: CustomToolContext = {
+			fetch: fetchMock,
+			sessionManager: {
+				getCwd: () => "/tmp",
+				getSessionId: () => "test-session",
+			} as unknown as ReadonlySessionManager,
+			modelRegistry: {
+				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
+				getProviderBaseUrl: () => undefined,
+				getProviderHeaders: (provider: string) =>
+					provider === "meta" ? { authorization: "Bearer proxy-credential" } : undefined,
+				getAll: () => [],
+				authStorage: { rotateSessionCredential: async () => false },
+				resolver: () => async () => "test-meta-key",
+			} as unknown as ModelRegistry,
+			model: undefined,
+			isIdle: () => true,
+			hasQueuedMessages: () => false,
+			abort: () => {},
+		};
+
+		const result = await imageGenTool.execute(
+			"call-meta-auth-casing",
+			{ subject: "a cat", provider: "meta" },
+			undefined,
+			ctx,
+		);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestHeaders?.get("authorization")).toBe("Bearer proxy-credential");
+		expect(result.details?.provider).toBe("meta");
+	});
 });

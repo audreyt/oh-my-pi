@@ -12,6 +12,7 @@ import {
 	withAuth,
 } from "@oh-my-pi/pi-ai";
 import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
+import { setHeaderIfAbsent } from "@oh-my-pi/pi-ai/providers/inference-headers";
 import {
 	applyCodexResidencyHeader,
 	CODEX_BASE_URL,
@@ -470,18 +471,18 @@ async function postImageEndpointRequest(options: {
 	return withAuth(
 		options.apiKey,
 		async key => {
+			const headers: Record<string, string> = {
+				...options.headers,
+				"Content-Type": "application/json",
+				"User-Agent": USER_AGENT,
+			};
+			// A caller-supplied Authorization under any casing (e.g. a
+			// Meta-compatible proxy via providers.meta.headers) wins over the
+			// generated bearer, matching resolveOpenAIRequestSetup.
+			setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
-				headers: {
-					...options.headers,
-					// A caller-supplied Authorization (e.g. a Meta-compatible
-					// proxy's own credential via providers.meta.headers) wins
-					// over the generated bearer, matching
-					// resolveOpenAIRequestSetup.
-					Authorization: options.headers?.Authorization ?? `Bearer ${key}`,
-					"Content-Type": "application/json",
-					"User-Agent": USER_AGENT,
-				},
+				headers,
 				body: JSON.stringify(options.body),
 				signal: options.signal,
 			});
