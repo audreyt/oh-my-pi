@@ -5691,6 +5691,10 @@
 				"models": [
 					{
 						"kind": "exact",
+						"value": "muse-spark-1.1"
+					},
+					{
+						"kind": "exact",
 						"value": "muse-spark-1.2"
 					},
 					{
@@ -5759,7 +5763,27 @@
 				}
 			},
 			{
-				"source": "classes/meta.kdl:25",
+				"source": "classes/meta.kdl:28",
+				"class": "meta",
+				"models": [
+					{
+						"kind": "exact",
+						"value": "muse-spark-1.3-contributor-free"
+					}
+				],
+				"thinking": {
+					"efforts": [
+						"minimal",
+						"low",
+						"medium",
+						"high",
+						"xhigh",
+						"max"
+					]
+				}
+			},
+			{
+				"source": "classes/meta.kdl:32",
 				"class": "meta",
 				"providers": [
 					"kilo",
@@ -12680,6 +12704,32 @@
 				],
 				"models": [
 					{
+						"kind": "exact",
+						"value": "meta/muse-spark-1.3"
+					},
+					{
+						"kind": "exact",
+						"value": "meta/muse-spark-1.3-contributor"
+					}
+				],
+				"priority": 1,
+				"thinking": {
+					"efforts": [
+						"minimal",
+						"low",
+						"medium",
+						"high",
+						"xhigh"
+					]
+				}
+			},
+			{
+				"source": "providers/vercel-ai-gateway.kdl:11",
+				"providers": [
+					"vercel-ai-gateway"
+				],
+				"models": [
+					{
 						"kind": "glob",
 						"value": "deepseek/*"
 					}
@@ -12695,7 +12745,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:10",
+				"source": "providers/vercel-ai-gateway.kdl:15",
 				"class": "anthropic",
 				"providers": [
 					"vercel-ai-gateway"
@@ -12721,7 +12771,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:15",
+				"source": "providers/vercel-ai-gateway.kdl:20",
 				"class": "gemini",
 				"providers": [
 					"vercel-ai-gateway"
@@ -12741,7 +12791,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:20",
+				"source": "providers/vercel-ai-gateway.kdl:25",
 				"class": "mimo",
 				"providers": [
 					"vercel-ai-gateway"
@@ -12759,7 +12809,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:26",
+				"source": "providers/vercel-ai-gateway.kdl:31",
 				"class": "stepfun",
 				"providers": [
 					"vercel-ai-gateway"
@@ -12770,7 +12820,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:30",
+				"source": "providers/vercel-ai-gateway.kdl:35",
 				"class": "unknown",
 				"providers": [
 					"vercel-ai-gateway"
@@ -12787,7 +12837,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:35",
+				"source": "providers/vercel-ai-gateway.kdl:40",
 				"class": "xai",
 				"providers": [
 					"vercel-ai-gateway"
@@ -12798,7 +12848,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:40",
+				"source": "providers/vercel-ai-gateway.kdl:45",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12833,7 +12883,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:45",
+				"source": "providers/vercel-ai-gateway.kdl:50",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12848,7 +12898,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:49",
+				"source": "providers/vercel-ai-gateway.kdl:54",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12863,7 +12913,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:53",
+				"source": "providers/vercel-ai-gateway.kdl:58",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12882,7 +12932,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:57",
+				"source": "providers/vercel-ai-gateway.kdl:62",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12900,7 +12950,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:62",
+				"source": "providers/vercel-ai-gateway.kdl:67",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12921,7 +12971,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:66",
+				"source": "providers/vercel-ai-gateway.kdl:71",
 				"providers": [
 					"vercel-ai-gateway"
 				],
@@ -12945,7 +12995,7 @@
 				}
 			},
 			{
-				"source": "providers/vercel-ai-gateway.kdl:70",
+				"source": "providers/vercel-ai-gateway.kdl:75",
 				"providers": [
 					"vercel-ai-gateway"
 				],

@@ -110780,7 +110780,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": false,
 				"supportsDeveloperRole": false,
@@ -110834,7 +110833,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"meta/muse-spark-1.3-contributor": {
 			"id": "meta/muse-spark-1.3-contributor",
@@ -110872,7 +110872,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": false,
 				"supportsDeveloperRole": false,
@@ -110926,7 +110925,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"microsoft/phi-4": {
 			"id": "microsoft/phi-4",
@@ -140214,6 +140214,12 @@
 					"max"
 				]
 			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -140269,12 +140275,6 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
 			},
-			"identity": {
-				"class": "meta",
-				"family": "muse-spark",
-				"revision": "1.3.0"
-			},
-			"requiresGlyphTokenization": false,
 			"supportsComputerUse": false,
 			"compatConfig": {
 				"supportsReasoningEffort": true,
@@ -140311,6 +140311,12 @@
 					"max"
 				]
 			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -140366,12 +140372,6 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
 			},
-			"identity": {
-				"class": "meta",
-				"family": "muse-spark",
-				"revision": "1.3.0"
-			},
-			"requiresGlyphTokenization": false,
 			"supportsComputerUse": false,
 			"compatConfig": {
 				"supportsReasoningEffort": true,
@@ -147440,6 +147440,15 @@
 					"max"
 				]
 			},
+			"int": 53,
+			"tps": 190.1,
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
+			"editPromptVariant": "compact",
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -147495,20 +147504,11 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
 			},
-			"int": 53,
-			"tps": 190.1,
-			"identity": {
-				"class": "meta",
-				"family": "muse-spark",
-				"revision": "1.3.0"
-			},
-			"requiresGlyphTokenization": false,
 			"supportsComputerUse": false,
 			"compatConfig": {
 				"supportsReasoningEffort": true,
 				"includeEncryptedReasoning": true
-			},
-			"editPromptVariant": "compact"
+			}
 		},
 		"muse-spark-1.3-contributor": {
 			"id": "muse-spark-1.3-contributor",
@@ -147536,9 +147536,17 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
+			"editPromptVariant": "compact",
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -147594,18 +147602,11 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
 			},
-			"identity": {
-				"class": "meta",
-				"family": "muse-spark",
-				"revision": "1.3.0"
-			},
-			"requiresGlyphTokenization": false,
 			"supportsComputerUse": false,
 			"compatConfig": {
 				"supportsReasoningEffort": true,
 				"includeEncryptedReasoning": true
-			},
-			"editPromptVariant": "compact"
+			}
 		}
 	},
 	"nanogpt": {
@@ -186374,7 +186375,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -186428,7 +186428,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"meta/muse-spark-1.3-contributor": {
 			"id": "meta/muse-spark-1.3-contributor",
@@ -186466,7 +186467,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -186520,7 +186520,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"microsoft/MAI-DS-R1-FP8": {
 			"id": "microsoft/MAI-DS-R1-FP8",
@@ -265097,7 +265098,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -265141,6 +265141,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": false,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -265151,7 +265152,8 @@
 				"reasoningDeltasMayBeCumulative": false,
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"ox-alpha-free": {
 			"id": "ox-alpha-free",
@@ -274215,7 +274217,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"identity": {
@@ -274224,7 +274227,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -274268,6 +274270,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": false,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -274278,7 +274281,8 @@
 				"reasoningDeltasMayBeCumulative": false,
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"nemotron-3-super-free": {
 			"id": "nemotron-3-super-free",
@@ -350216,8 +350220,7 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh",
-					"max"
+					"xhigh"
 				]
 			},
 			"int": 62.1,
@@ -350279,8 +350282,7 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh",
-					"max"
+					"xhigh"
 				]
 			},
 			"compat": {
