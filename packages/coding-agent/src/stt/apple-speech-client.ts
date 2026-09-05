@@ -1,7 +1,12 @@
+// Subpath imports: cli.ts imports this module for the smoke probe, and the
+// pi-utils barrel would pull native addons into normal CLI startup.
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getTinyModelsCacheDir, isEnoent, logger, readLines } from "@oh-my-pi/pi-utils";
+import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils/dirs";
+import { isEnoent } from "@oh-my-pi/pi-utils/fs-error";
+import * as logger from "@oh-my-pi/pi-utils/logger";
+import { readLines } from "@oh-my-pi/pi-utils/stream";
 import type { Subprocess } from "bun";
 import { isThenable } from "../utils/ipc";
 import { replaceFileAtomically } from "../utils/atomic-file";
