@@ -370,7 +370,7 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		expect(model.thinking?.efforts).not.toContain(Effort.Max);
 	});
 
-	it("exposes the max tier only on muse-spark-1.3 and its contributor", () => {
+	it("exposes the max tier on muse-spark-1.3 and its -free billing variant", () => {
 		const spark13 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.3",
@@ -399,7 +399,28 @@ describe("xAI Responses reasoning-effort suppression", () => {
 				input: ["text", "image"],
 			}),
 		);
-		expect(contributor.thinking?.efforts).toContain(Effort.Max);
+		// Upstream policy (classes/meta.kdl): Meta documents `max` for the
+		// 1.3 standard SKU only; the contributor SKU keeps the five-tier
+		// ladder. The `-free` billing variant below is the branch's residue
+		// coverage and keeps its own exact-id rule.
+		expect(contributor.thinking?.efforts).toEqual([
+			Effort.Minimal,
+			Effort.Low,
+			Effort.Medium,
+			Effort.High,
+			Effort.XHigh,
+		]);
+		const freeAlias = buildModel(
+			completionsSpec({
+				id: "muse-spark-1.3-contributor-free",
+				name: "Muse Spark 1.3 Free",
+				provider: "opencode-zen",
+				baseUrl: "https://opencode.ai/zen/v1",
+				reasoning: true,
+				input: ["text", "image"],
+			}),
+		);
+		expect(freeAlias.thinking?.efforts).toContain(Effort.Max);
 		const spark12 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.2",
