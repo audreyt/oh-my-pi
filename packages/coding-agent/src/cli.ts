@@ -36,7 +36,6 @@ import { DAEMON_BROKER_WORKER_ARG } from "./launch/protocol";
 import { TERMINAL_OUTPUT_WORKER_ARG } from "./launch/terminal-output-worker-protocol";
 import { LSP_MUX_WORKER_ARG } from "./lsp/mux/protocol";
 import { STATS_ACTIVITY_WORKER_ARG } from "./stats/activity-protocol";
-import { smokeTestAppleSpeechSidecar } from "./stt/apple-speech-client";
 import rootLicense from "./tools/browser/relay/extension-assets/LICENSE.txt" with { type: "text" };
 import thirdPartyNotices from "./tools/browser/relay/extension-assets/THIRD-PARTY-NOTICES.txt" with { type: "text" };
 import { COMPUTER_WORKER_ARG } from "./tools/computer/protocol";
@@ -96,6 +95,7 @@ async function runSmokeTest(): Promise<void> {
 	const { smokeTestSyncWorker, startServer } = await import("@oh-my-pi/omp-stats");
 	const { smokeTestTinyTitleWorker } = await import("./tiny/title-client");
 	const { smokeTestSttWorker } = await import("./stt/asr-client");
+	const { smokeTestAppleSpeechSidecar } = await import("./stt/apple-speech-client");
 	const { smokeTestTtsWorker } = await import("./tts/tts-client");
 	const { smokeTestMnemopiEmbedWorker } = await import("./mnemopi/embed-client");
 	const { smokeTestStatsActivityWorker } = await import("./stats/activity-client");
