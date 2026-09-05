@@ -13,6 +13,7 @@ import {
 } from "@oh-my-pi/pi-ai";
 import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
 import { fetchAntigravityImageModel } from "@oh-my-pi/pi-catalog/discovery/antigravity";
+import { setHeaderIfAbsent } from "@oh-my-pi/pi-ai/providers/inference-headers";
 import {
 	applyCodexResidencyHeader,
 	CODEX_BASE_URL,
@@ -485,19 +486,19 @@ async function postImageEndpointRequest(options: {
 		options.apiKey,
 		async key => {
 			const configuredHeaders = await options.resolveHeaders?.();
+			const headers: Record<string, string> = {
+				...configuredHeaders,
+				...options.headers,
+				"Content-Type": "application/json",
+				"User-Agent": USER_AGENT,
+			};
+			// A caller-supplied Authorization under any casing (e.g. a
+			// Meta-compatible proxy via providers.meta.headers) wins over the
+			// generated bearer, matching resolveOpenAIRequestSetup.
+			setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
-				headers: {
-					...configuredHeaders,
-					...options.headers,
-					// A caller-supplied Authorization (e.g. a Meta-compatible
-					// proxy's own credential via providers.meta.headers) wins
-					// over the generated bearer, matching
-					// resolveOpenAIRequestSetup.
-					Authorization: options.headers?.Authorization ?? `Bearer ${key}`,
-					"Content-Type": "application/json",
-					"User-Agent": USER_AGENT,
-				},
+				headers,
 				body: JSON.stringify(options.body),
 				signal: options.signal,
 			});
