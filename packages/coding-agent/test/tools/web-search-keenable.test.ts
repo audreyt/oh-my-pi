@@ -130,6 +130,48 @@ describe("Keenable web search provider", () => {
 		});
 	});
 
+	it("keeps a path-scoped site: in the query while mapping the host natively", async () => {
+		let requestBody: Record<string, unknown> | null = null;
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			requestBody = JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>;
+			return new Response(JSON.stringify({ results: [] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		await searchKeenable({
+			...makeParams("claude sdk site:github.com/anthropics"),
+			fetch: fetchMock,
+		});
+
+		expect(requestBody).toMatchObject({
+			query: "claude sdk site:github.com/anthropics",
+			site: "github.com",
+		});
+	});
+
+	it("leaves multiple site: directives in the query without a native site field", async () => {
+		let requestBody: Record<string, unknown> | null = null;
+		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			requestBody = JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>;
+			return new Response(JSON.stringify({ results: [] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		await searchKeenable({
+			...makeParams("cve site:nvd.nist.gov site:mitre.org"),
+			fetch: fetchMock,
+		});
+
+		expect(requestBody).toMatchObject({
+			query: "cve (site:nvd.nist.gov OR site:mitre.org)",
+		});
+		expect(requestBody).not.toHaveProperty("site");
+	});
+
 	it("maps after:/before: to published_after/published_before instead of recency", async () => {
 		expect(
 			buildRequestBody({

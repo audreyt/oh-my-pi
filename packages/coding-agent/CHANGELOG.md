@@ -10,6 +10,9 @@
 
 - Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939)).
 
+### Fixed
+
+- Keenable searches now preserve paths in `site:` constraints instead of broadening them to the entire host.
 
 ## [18.1.11] - 2026-09-05
 
