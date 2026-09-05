@@ -4,9 +4,6 @@
 
 ### Added
 
-- Added `memory.backend: mnemon`, a native [Mnemon](https://github.com/mnemon-dev/mnemon) CLI backend against `~/.mnemon`. It occupies the same host slot as Mnemopi (`recall` / `retain`, `/memory stats`, first-turn silent recall, compaction context) without using the Mnemopi SQLite schema. Silent recall is high-score only. `/memory clear` is refused. `reflect` and `memory_edit` stay Mnemopi/Hindsight-only. Do not point `mnemopi.dbPath` at `~/.mnemon`.
-- Made Markdown links to existing local files and resources clickable while preserving their displayed URLs.
-- Added the `/switch <model>` command for session-only model changes from the prompt, with support for the same model selectors and completions used by `--model`; ACP `/model <model>` accepts these selectors as well.
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 
 ### Fixed
