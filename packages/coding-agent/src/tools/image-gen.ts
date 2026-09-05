@@ -474,7 +474,11 @@ async function postImageEndpointRequest(options: {
 				method: "POST",
 				headers: {
 					...options.headers,
-					Authorization: `Bearer ${key}`,
+					// A caller-supplied Authorization (e.g. a Meta-compatible
+					// proxy's own credential via providers.meta.headers) wins
+					// over the generated bearer, matching
+					// resolveOpenAIRequestSetup.
+					Authorization: options.headers?.Authorization ?? `Bearer ${key}`,
 					"Content-Type": "application/json",
 					"User-Agent": USER_AGENT,
 				},
