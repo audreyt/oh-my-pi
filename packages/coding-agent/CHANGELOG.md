@@ -2,16 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
+
 ### Changed
 
 - Muse Code sessions send a compact hashline edit description (~3 KB less per request); all other models keep the full prompt.
+
+### Fixed
+
+- Keyless image proxies no longer receive a synthetic bearer token; explicitly configured authorization headers are preserved.
 
 ## [18.1.11] - 2026-09-05
 
 ### Added
 
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
-- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
 - Added opt-in `bash.allowCompoundCommands` approval for conservative literal `&&` chains, with ordered per-segment rules and normal bash policy fallback for unmatched segments. The opt-in requires a positively classified POSIX-quoting shell; incompatible and unknown shells retain legacy approval. Whole-chain denies take precedence over earlier prompts.
 
 ### Fixed

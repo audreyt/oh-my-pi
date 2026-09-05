@@ -12,6 +12,7 @@ import {
 	withAuth,
 } from "@oh-my-pi/pi-ai";
 import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
+import { setHeaderIfAbsent } from "@oh-my-pi/pi-ai/providers/inference-headers";
 import {
 	applyCodexResidencyHeader,
 	CODEX_BASE_URL,
@@ -20,7 +21,7 @@ import {
 	OPENAI_HEADERS,
 	URL_PATHS,
 } from "@oh-my-pi/pi-catalog/wire/codex";
-import { hostedDefaultModel } from "@oh-my-pi/pi-catalog/compat/behavior";
+import { hostedDefaultModel, imageProviderFor } from "@oh-my-pi/pi-catalog/compat/behavior";
 import { META_MODEL_API_BASE_URL } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
 import {
@@ -34,7 +35,7 @@ import {
 	USER_AGENT,
 	untilAborted,
 } from "@oh-my-pi/pi-utils";
-import { isAuthenticated, type ModelRegistry } from "../config/model-registry";
+import { isAuthenticated, kNoAuth, type ModelRegistry } from "../config/model-registry";
 import { settings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { resolveXAIHttpCredentials } from "../lib/xai-http";
@@ -470,14 +471,19 @@ async function postImageEndpointRequest(options: {
 	return withAuth(
 		options.apiKey,
 		async key => {
+			const headers: Record<string, string> = { ...options.headers };
+			// Caller-supplied headers under any casing (e.g. a Meta-compatible
+			// proxy via providers.meta.headers) win over the generated
+			// defaults, matching resolveOpenAIRequestSetup. Forcing the
+			// defaults as object keys would duplicate a caller field spelled
+			// with different casing (fetch coalesces the pair into one
+			// comma-joined value).
+			if (key !== kNoAuth) setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
+			setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
+			setHeaderIfAbsent(headers, "Content-Type", "application/json");
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
-				headers: {
-					...options.headers,
-					Authorization: `Bearer ${key}`,
-					"Content-Type": "application/json",
-					"User-Agent": USER_AGENT,
-				},
+				headers,
 				body: JSON.stringify(options.body),
 				signal: options.signal,
 			});
@@ -754,26 +760,9 @@ async function findCodexSubscriptionImageCredentials(
 }
 
 function activeImageProvider(model: Model | undefined): Exclude<ImageProviderPreference, "auto"> | null {
-	switch (model?.provider) {
-		case "openai":
-		case "openai-codex":
-			return "openai";
-		case "google-antigravity":
-			return "antigravity";
-		case "xai":
-		case "xai-oauth":
-			return "xai";
-		case "openrouter":
-			return "openrouter";
-		case "deepinfra":
-			return "deepinfra";
-		case "meta":
-			return "meta";
-		case "google":
-			return "gemini";
-		default:
-			return null;
-	}
+	if (!model?.provider) return null;
+	const backend = imageProviderFor(model.provider);
+	return isImageProviderId(backend) ? backend : null;
 }
 
 function imageProviderOrder(activeModel: Model | undefined, requested?: ImageProviderPreference): ImageProvider[] {
