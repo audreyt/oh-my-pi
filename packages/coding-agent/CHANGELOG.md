@@ -12,7 +12,7 @@
 
 ### Fixed
 
-- Keenable searches now preserve paths in `site:` constraints instead of broadening them to the entire host.
+- Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
 
 ## [18.1.11] - 2026-09-05
 

@@ -153,9 +153,9 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 		fetch: params.fetch,
 	};
 	if (parsed.hasDirectives) {
-		// Native `site` is host-only. A bare host is stripped from the query;
-		// a path-scoped single site keeps the intact `site:` directive so the
-		// path is not dropped. Multiple sites stay inline (no native field).
+		// Native `site` is host-only. Strip a bare host only when there are no
+		// exclusions: formatQuery's site capability controls both polarities.
+		// Paths, exclusions, and multiple sites must retain query syntax.
 		const siteValue = parsed.sites.length === 1 ? parsed.sites[0] : undefined;
 		const nativeHost = siteValue?.split("/", 1)[0] || undefined;
 		keenableParams.site = nativeHost;
@@ -163,7 +163,7 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 			phrases: true,
 			negation: true,
 			or: true,
-			site: !nativeHost || nativeHost !== siteValue,
+			site: !nativeHost || nativeHost !== siteValue || parsed.excludedSites.length > 0,
 			inTitle: true,
 			inUrl: true,
 			filetype: true,

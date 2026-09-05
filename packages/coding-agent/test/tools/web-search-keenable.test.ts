@@ -109,7 +109,18 @@ describe("Keenable web search provider", () => {
 		expect(response.sources[0]?.ageSeconds).toBeTypeOf("number");
 	});
 
-	it("maps a single site: directive to site and strips it from the query", async () => {
+	it.each([
+		{
+			name: "maps a bare positive site natively",
+			query: "typescript site:github.com",
+			expectedQuery: "typescript",
+		},
+		{
+			name: "preserves excluded sites alongside the native positive host",
+			query: "typescript site:github.com -site:gist.github.com",
+			expectedQuery: "typescript site:github.com -site:gist.github.com",
+		},
+	])("$name", async ({ query, expectedQuery }) => {
 		let requestBody: Record<string, unknown> | null = null;
 		const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			requestBody = JSON.parse(String(init?.body ?? "null")) as Record<string, unknown>;
@@ -120,12 +131,12 @@ describe("Keenable web search provider", () => {
 		};
 
 		await searchKeenable({
-			...makeParams("typescript site:github.com"),
+			...makeParams(query),
 			fetch: fetchMock,
 		});
 
 		expect(requestBody).toMatchObject({
-			query: "typescript",
+			query: expectedQuery,
 			site: "github.com",
 		});
 	});
