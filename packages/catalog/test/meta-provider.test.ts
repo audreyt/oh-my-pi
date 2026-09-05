@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { buildModel } from "@oh-my-pi/pi-catalog/build";
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { CATALOG_PROVIDERS } from "@oh-my-pi/pi-catalog/provider-models/descriptors";
 import { META_MUSE_STATIC_MODELS, metaModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
@@ -7,6 +8,11 @@ import type { ThinkingConfig } from "@oh-my-pi/pi-catalog/types";
 const MUSE_SPARK_THINKING: ThinkingConfig = {
 	mode: "effort",
 	efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh],
+};
+
+const MUSE_SPARK_1_3_THINKING: ThinkingConfig = {
+	mode: "effort",
+	efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max],
 };
 
 function modelListResponse(ids: readonly string[]): Response {
@@ -23,6 +29,9 @@ describe("Meta Model API provider", () => {
 			"muse-spark-1.3",
 			"muse-spark-1.3-contributor",
 		]);
+		// The seed carries no `thinking`: effort ladders are KDL-owned
+		// (compat/rules/classes/meta.kdl) and explicit spec thinking would
+		// shadow the per-revision rules at build time.
 		expect(byId.get("muse-spark-1.3")).toEqual({
 			id: "muse-spark-1.3",
 			name: "Muse Spark 1.3",
@@ -34,14 +43,28 @@ describe("Meta Model API provider", () => {
 			cost: { input: 1.25, output: 4.25, cacheRead: 0.15, cacheWrite: 0 },
 			contextWindow: 1_048_576,
 			maxTokens: 131_072,
-			thinking: MUSE_SPARK_THINKING,
 			compat: { supportsReasoningEffort: true, includeEncryptedReasoning: true },
 		});
 		expect(byId.get("muse-spark-1.3-contributor")).toMatchObject({
 			name: "Muse Spark 1.3 (C)",
 			cost: { input: 0.1, output: 0.2, cacheRead: 0.002, cacheWrite: 0 },
-			thinking: MUSE_SPARK_THINKING,
 		});
+		expect(byId.get("muse-spark-1.3")).not.toHaveProperty("thinking");
+		expect(byId.get("muse-spark-1.3-contributor")).not.toHaveProperty("thinking");
+		const options = metaModelManagerOptions();
+		expect(options.providerId).toBe("meta");
+		expect(options.staticModels).toEqual(META_MUSE_STATIC_MODELS);
+	});
+
+	test("resolves the 1.3 max tier from KDL while older revisions stay capped at xhigh", () => {
+		// Built-model contract, not seed text: the exact-id KDL rule owns `max`.
+		const built = new Map(META_MUSE_STATIC_MODELS.map(model => [model.id, buildModel(model)]));
+		for (const id of ["muse-spark-1.3", "muse-spark-1.3-contributor"]) {
+			expect(built.get(id)?.thinking).toEqual(MUSE_SPARK_1_3_THINKING);
+		}
+		for (const id of ["muse-spark-1.1", "muse-spark-1.2", "muse-spark-1.2-contributor"]) {
+			expect(built.get(id)?.thinking).toEqual(MUSE_SPARK_THINKING);
+		}
 		const options = metaModelManagerOptions();
 		expect(options.providerId).toBe("meta");
 		expect(options.staticModels).toEqual(META_MUSE_STATIC_MODELS);
@@ -64,7 +87,7 @@ describe("Meta Model API provider", () => {
 			input: ["text", "image"],
 			contextWindow: 1_048_576,
 			maxTokens: 131_072,
-			thinking: MUSE_SPARK_THINKING,
+			thinking: MUSE_SPARK_1_3_THINKING,
 		});
 		expect(byId.get("muse-spark-1.3-contributor")).toMatchObject({
 			name: "Muse Spark 1.3 (C)",
@@ -77,13 +100,17 @@ describe("Meta Model API provider", () => {
 	test("unseeded Muse Spark revisions inherit lineage capabilities and tier naming", async () => {
 		// Meta ships revisions gateway-first; until the seed lists one it must
 		// still resolve with the lineage's window, thinking ladder, and pricing
-		// rather than the bare discovery defaults.
+		// rather than the bare discovery defaults. The ladder is KDL-owned, so
+		// the raw mapper rows carry no `thinking` — assert the built contract,
+		// exactly as the model manager materializes it.
 		const options = metaModelManagerOptions({
 			apiKey: "meta-key",
 			fetch: async () => modelListResponse(["muse-spark-1.4", "muse-spark-1.4-contributor", "muse-spark-2.0.1"]),
 		});
-		const models = await options.fetchDynamicModels?.();
-		const byId = new Map((models ?? []).map(model => [model.id, model]));
+		const specs = await options.fetchDynamicModels?.();
+		expect(specs?.find(model => model.id === "muse-spark-1.4")).not.toHaveProperty("thinking");
+		const models = (specs ?? []).map(spec => buildModel(spec));
+		const byId = new Map(models.map(model => [model.id, model]));
 		expect(byId.get("muse-spark-1.4")).toMatchObject({
 			name: "Muse Spark 1.4",
 			reasoning: true,

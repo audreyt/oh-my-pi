@@ -110770,7 +110770,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"identity": {
@@ -110861,7 +110862,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"identity": {
@@ -140205,7 +140207,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"compat": {
@@ -140300,7 +140303,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"compat": {
@@ -185863,7 +185867,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"identity": {
@@ -185954,7 +185959,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"identity": {
@@ -264584,7 +264590,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"identity": {
@@ -292415,7 +292422,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
 				"defaultLevel": "medium",
 				"requiresEffort": true
@@ -292519,7 +292527,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
 				"defaultLevel": "medium",
 				"requiresEffort": true
@@ -349710,7 +349719,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"int": 62.1,
@@ -349772,7 +349782,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"compat": {
@@ -376179,7 +376190,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"int": 62.1,
@@ -376271,7 +376283,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"compat": {

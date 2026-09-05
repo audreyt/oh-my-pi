@@ -5,6 +5,7 @@
 ### Added
 
 - Added the Meta/Muse Image hosted image operation to the compat policy: a `meta-image` default of `muse-image-1.0` for the model-less `generate_image` tool.
+- Added the `max` thinking-effort tier to Muse Spark 1.3 and its contributor variant.
 
 ## [18.1.9] - 2026-09-04
 
