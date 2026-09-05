@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils";
-import { withFileLock } from "@oh-my-pi/pi-utils/file-lock";
+import { LockAcquireError, withFileLock } from "@oh-my-pi/pi-utils/file-lock";
 import type { TinyTitleLocalModelSpec } from "./models";
 import bundledArm64Identity from "./apple-fm/prebuilt/arm64-apple-macosx26.0/digest.txt" with { type: "text" };
 import bundledArm64Sidecar from "./apple-fm/prebuilt/arm64-apple-macosx26.0/omp-apple-fm" with { type: "file" };
@@ -114,16 +114,8 @@ export function isAfmRequestScopedFailure(error: unknown): boolean {
 	return !AFM_TERMINAL_AVAILABILITY.test(text);
 }
 
-function isAbortError(error: unknown): boolean {
-	return error instanceof Error && error.name === "AbortError";
-}
-
 function mapSidecarInstallError(error: unknown): unknown {
-	if (isAbortError(error)) return error;
-	const text = error instanceof Error ? error.message : String(error);
-	if (text.startsWith("Failed to acquire lock for ")) {
-		return new Error("apple_fm_busy: sidecar install lock");
-	}
+	if (error instanceof LockAcquireError) return new Error("apple_fm_busy: sidecar install lock");
 	return error;
 }
 
@@ -329,4 +321,5 @@ export async function completeAfmCore(input: {
 /** Test-only. Not part of the supported module API. */
 export const __internalsForTesting = {
 	darwinMeetsAfmRuntime,
+	mapSidecarInstallError,
 };
