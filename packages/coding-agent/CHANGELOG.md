@@ -22,6 +22,8 @@
 - Improved parent IRC message prompts to make interruption handling more reliable.
 - Improved subagent task labels and plan filenames to use concise, action-oriented descriptions.
 - Updated CLI byte sizes to use decimal KB units and made duration displays coarser and easier to read.
+- Added opt-in Apple Foundation Models (`afm-core`) session title generation for Darwin hosts ([#9683](https://github.com/can1357/oh-my-pi/pull/9683)).
+- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 
 ### Fixed
 
