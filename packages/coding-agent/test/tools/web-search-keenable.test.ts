@@ -45,6 +45,29 @@ describe("Keenable web search provider", () => {
 		} as const;
 	}
 
+	it("keeps a rotated credential across the recency fallback", async () => {
+		let key = "rejected-key";
+		const sentKeys: (string | null)[] = [];
+		vi.spyOn(fakeAuthStorage, "resolver").mockReturnValue(async () => key);
+		const response = await searchKeenable({
+			...makeParams("ai chips"),
+			recency: "day",
+			fetch: async (_input, init) => {
+				const sent = new Headers(init?.headers).get("x-api-key");
+				sentKeys.push(sent);
+				if (sent === "rejected-key") {
+					key = "working-key";
+					return Response.json({ error: "invalid key" }, { status: 401 });
+				}
+				return Response.json({
+					results: sentKeys.length === 2 ? [] : [{ title: "Found", url: "https://example.com/found" }],
+				});
+			},
+		});
+		expect(sentKeys).toEqual(["rejected-key", "working-key", "working-key"]);
+		expect(response.sources[0]?.url).toBe("https://example.com/found");
+	});
+
 	it("maps Keenable hits into SearchResponse and forwards recency as published_after", async () => {
 		let requestUrl = "";
 		let requestHeaders: Headers | undefined;
