@@ -12,13 +12,15 @@ export interface TinyTitleLocalModelSpec {
 	/** ONNX export loaded by transformers.js on every platform. */
 	repo: string;
 	dtype: "q4";
-	/** Pre-quantized MLX export loaded by mlx-lm when `PI_TINY_DEVICE=mlx`. Absent for `foundation-models` (OS-owned weights). */
+	/** Pre-quantized MLX export loaded by mlx-lm when `PI_TINY_DEVICE=mlx`. Absent for non-weight engines (Apple Foundation Models). */
 	mlxRepo?: string;
 	label: string;
 	description: string;
 	contextNote: string;
 	/** Model family emits hidden reasoning unless the chat template disables it. */
 	reasoning?: boolean;
+	/** Darwin-only gate for non-weight engines; `undefined` when usable on this machine. */
+	unsupportedReason?: string;
 	/** Reason the ONNX backend refuses this model before loading the runtime; the MLX backend ignores it. */
 	onnxUnsupportedReason?: string;
 	/** Legacy platform gate for `foundation-models` (e.g. macOS-only); `undefined` when usable. */
@@ -61,11 +63,12 @@ export const TINY_TITLE_LOCAL_MODELS = [
 		label: "AFM 3 Core",
 		description:
 			"On-device Apple Foundation Model (macOS). OS-owned weights; download is a readiness probe, not a Hugging Face fetch.",
-		contextNote: "Darwin only. Fail closed when Apple Intelligence is off or the model is not ready.",
+		contextNote:
+			"Darwin only. Session context is SystemLanguageModel.contextSize (4096 on 26.x, live _contextSize on 27+; 8192 for AFM 3 on this class of Mac). Fail closed when Apple Intelligence is off or the model is not ready.",
 		unsupportedReason: process.platform === "darwin" ? undefined : "Apple Foundation Models is macOS-only",
+		onnxUnsupportedReason: "Apple Foundation Models uses the SystemLanguageModel engine, not ONNX",
 	},
 ] as const satisfies readonly TinyTitleLocalModelSpec[];
-
 export const TINY_TITLE_MODEL_VALUES = [
 	ONLINE_TINY_TITLE_MODEL_KEY,
 	"lfm2.5-230m",

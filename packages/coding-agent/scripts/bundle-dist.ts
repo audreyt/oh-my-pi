@@ -75,6 +75,7 @@ async function cleanBundleOutputs(): Promise<void> {
 					(process.platform === "darwin" && entry.startsWith("omp-speech-analyzer-")) ||
 					entry.endsWith(".js.map") ||
 					(entry.startsWith("CHANGELOG-") && entry.endsWith(".md")) ||
+					entry.startsWith("omp-apple-fm-") ||
 					legacyHtmlExportAssetPattern.test(entry),
 			)
 			.map(entry => fs.rm(path.join(outDir, entry), { force: true })),
