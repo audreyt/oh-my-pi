@@ -370,7 +370,7 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		expect(model.thinking?.efforts).not.toContain(Effort.Max);
 	});
 
-	it("exposes the max tier only on muse-spark-1.3 and its contributor", () => {
+	it("exposes the max tier only on muse-spark-1.3 and its contributor variants", () => {
 		const spark13 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.3",
@@ -400,6 +400,17 @@ describe("xAI Responses reasoning-effort suppression", () => {
 			}),
 		);
 		expect(contributor.thinking?.efforts).toContain(Effort.Max);
+		const freeAlias = buildModel(
+			completionsSpec({
+				id: "muse-spark-1.3-contributor-free",
+				name: "Muse Spark 1.3 Free",
+				provider: "opencode-zen",
+				baseUrl: "https://opencode.ai/zen/v1",
+				reasoning: true,
+				input: ["text", "image"],
+			}),
+		);
+		expect(freeAlias.thinking?.efforts).toContain(Effort.Max);
 		const spark12 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.2",
