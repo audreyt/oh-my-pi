@@ -13,6 +13,7 @@
 ### Fixed
 
 - Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
+- Keenable recency retries now share the original search timeout instead of extending it.
 
 ## [18.1.11] - 2026-09-05
 
