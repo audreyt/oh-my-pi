@@ -37,6 +37,13 @@
 - Fixed generation token-rate displays for subagents and restored the main session's reading after switching focus.
 - Fixed subagent HUD labels and plan filenames being populated with example prompt text on smaller models.
 - Improved shell, file, session, and persistence operations to avoid unnecessary repeated work, improving responsiveness and resource usage.
+- Cancelled `afm-core` title generation and readiness probes now kill the sidecar process instead of leaving it running.
+- `afm-core` now reports `unsupported_os` on macOS earlier than 26 instead of launching a 26-target sidecar that dyld rejects.
+- Title generation now emits a terminal progress event when a previously failed local tiny model is skipped, so the download UI can unsubscribe.
+- A contended `afm-core` sidecar compile lock no longer disables title generation for the rest of the process.
+- `afm-core` now validates its sidecar cache under the compile lock so a concurrent install cannot return a mismatched helper.
+- Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
+- Interrupted `afm-core` upgrades no longer leave stale cache stamps that validate a different sidecar build.
 
 ## [18.2.4] - 2026-09-17
 
