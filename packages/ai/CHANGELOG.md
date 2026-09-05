@@ -8,6 +8,9 @@
 
 - Added support for Cerebras Qwen 3.8-27b with improved reasoning effort control
 - Added optional host browser-session callbacks for Perplexity SSO login, keeping browser automation out of pi-ai and preserving email and authenticator-code login.
+### Added
+
+- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
 
 ### Fixed
 
