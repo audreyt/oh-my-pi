@@ -110780,7 +110780,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": false,
 				"supportsDeveloperRole": false,
@@ -110834,7 +110833,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"meta/muse-spark-1.3-contributor": {
 			"id": "meta/muse-spark-1.3-contributor",
@@ -110872,7 +110872,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": false,
 				"supportsDeveloperRole": false,
@@ -110926,7 +110925,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"microsoft/phi-4": {
 			"id": "microsoft/phi-4",
@@ -139968,6 +139968,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -140063,6 +140064,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -140158,6 +140160,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -140211,6 +140214,12 @@
 					"max"
 				]
 			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -140254,6 +140263,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -140265,12 +140275,6 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
 			},
-			"identity": {
-				"class": "meta",
-				"family": "muse-spark",
-				"revision": "1.3.0"
-			},
-			"requiresGlyphTokenization": false,
 			"supportsComputerUse": false,
 			"compatConfig": {
 				"supportsReasoningEffort": true,
@@ -140307,6 +140311,12 @@
 					"max"
 				]
 			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -140350,6 +140360,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -140361,12 +140372,6 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
 			},
-			"identity": {
-				"class": "meta",
-				"family": "muse-spark",
-				"revision": "1.3.0"
-			},
-			"requiresGlyphTokenization": false,
 			"supportsComputerUse": false,
 			"compatConfig": {
 				"supportsReasoningEffort": true,
@@ -147109,6 +147114,499 @@
 				"supportsPromptCacheKey": false
 			},
 			"supportsComputerUseConfig": false
+		}
+	},
+	"muse-code": {
+		"muse-spark-1.1": {
+			"id": "muse-spark-1.1",
+			"name": "Muse Spark 1.1",
+			"api": "openai-responses",
+			"provider": "muse-code",
+			"baseUrl": "https://api.meta.ai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 1.25,
+				"output": 4.25,
+				"cacheRead": 0.15,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 131072,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh"
+				]
+			},
+			"compat": {
+				"supportsDeveloperRole": false,
+				"supportsStrictMode": false,
+				"supportsReasoningEffort": true,
+				"supportsLongPromptCacheRetention": false,
+				"supportsPromptCacheBreakpoints": false,
+				"strictResponsesPairing": false,
+				"supportsImageDetailOriginal": true,
+				"supportsReasoningSummary": true,
+				"supportsAllTurnsReasoningContext": false,
+				"supportsConfigurationUpdate": false,
+				"requiresReasoningOffJuiceInstruction": false,
+				"stripImageInput": false,
+				"reasoningEffortMap": {},
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresAssistantContentForToolCalls": false,
+				"isOpenRouterHost": false,
+				"isVercelGatewayHost": false,
+				"wireModelIdMode": "raw",
+				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
+				"supportsObfuscationOptOut": false,
+				"officialEndpoint": false,
+				"harmonyLeakMitigation": false,
+				"rejectRootObjectUnion": false,
+				"retryWithoutStrictOnGrammarError": false,
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false
+			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.1.0"
+			},
+			"requiresGlyphTokenization": false,
+			"supportsComputerUse": false,
+			"compatConfig": {
+				"supportsReasoningEffort": true,
+				"includeEncryptedReasoning": true
+			},
+			"editPromptVariant": "compact"
+		},
+		"muse-spark-1.2": {
+			"id": "muse-spark-1.2",
+			"name": "Muse Spark 1.2",
+			"api": "openai-responses",
+			"provider": "muse-code",
+			"baseUrl": "https://api.meta.ai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 1.25,
+				"output": 4.25,
+				"cacheRead": 0.15,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 131072,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh"
+				]
+			},
+			"compat": {
+				"supportsDeveloperRole": false,
+				"supportsStrictMode": false,
+				"supportsReasoningEffort": true,
+				"supportsLongPromptCacheRetention": false,
+				"supportsPromptCacheBreakpoints": false,
+				"strictResponsesPairing": false,
+				"supportsImageDetailOriginal": true,
+				"supportsReasoningSummary": true,
+				"supportsAllTurnsReasoningContext": false,
+				"supportsConfigurationUpdate": false,
+				"requiresReasoningOffJuiceInstruction": false,
+				"stripImageInput": false,
+				"reasoningEffortMap": {},
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresAssistantContentForToolCalls": false,
+				"isOpenRouterHost": false,
+				"isVercelGatewayHost": false,
+				"wireModelIdMode": "raw",
+				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
+				"supportsObfuscationOptOut": false,
+				"officialEndpoint": false,
+				"harmonyLeakMitigation": false,
+				"rejectRootObjectUnion": false,
+				"retryWithoutStrictOnGrammarError": false,
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false
+			},
+			"int": 46.8,
+			"tps": 260,
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.2.0"
+			},
+			"requiresGlyphTokenization": false,
+			"supportsComputerUse": false,
+			"compatConfig": {
+				"supportsReasoningEffort": true,
+				"includeEncryptedReasoning": true
+			},
+			"editPromptVariant": "compact"
+		},
+		"muse-spark-1.2-contributor": {
+			"id": "muse-spark-1.2-contributor",
+			"name": "Muse Spark 1.2 Contributor",
+			"api": "openai-responses",
+			"provider": "muse-code",
+			"baseUrl": "https://api.meta.ai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.1,
+				"output": 0.2,
+				"cacheRead": 0.002,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 131072,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh"
+				]
+			},
+			"compat": {
+				"supportsDeveloperRole": false,
+				"supportsStrictMode": false,
+				"supportsReasoningEffort": true,
+				"supportsLongPromptCacheRetention": false,
+				"supportsPromptCacheBreakpoints": false,
+				"strictResponsesPairing": false,
+				"supportsImageDetailOriginal": true,
+				"supportsReasoningSummary": true,
+				"supportsAllTurnsReasoningContext": false,
+				"supportsConfigurationUpdate": false,
+				"requiresReasoningOffJuiceInstruction": false,
+				"stripImageInput": false,
+				"reasoningEffortMap": {},
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresAssistantContentForToolCalls": false,
+				"isOpenRouterHost": false,
+				"isVercelGatewayHost": false,
+				"wireModelIdMode": "raw",
+				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
+				"supportsObfuscationOptOut": false,
+				"officialEndpoint": false,
+				"harmonyLeakMitigation": false,
+				"rejectRootObjectUnion": false,
+				"retryWithoutStrictOnGrammarError": false,
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false
+			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.2.0"
+			},
+			"requiresGlyphTokenization": false,
+			"supportsComputerUse": false,
+			"compatConfig": {
+				"supportsReasoningEffort": true,
+				"includeEncryptedReasoning": true
+			},
+			"editPromptVariant": "compact"
+		},
+		"muse-spark-1.3": {
+			"id": "muse-spark-1.3",
+			"name": "Muse Spark 1.3",
+			"api": "openai-responses",
+			"provider": "muse-code",
+			"baseUrl": "https://api.meta.ai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 1.25,
+				"output": 4.25,
+				"cacheRead": 0.15,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 131072,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh",
+					"max"
+				]
+			},
+			"int": 53,
+			"tps": 190.1,
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
+			"editPromptVariant": "compact",
+			"compat": {
+				"supportsDeveloperRole": false,
+				"supportsStrictMode": false,
+				"supportsReasoningEffort": true,
+				"supportsLongPromptCacheRetention": false,
+				"supportsPromptCacheBreakpoints": false,
+				"strictResponsesPairing": false,
+				"supportsImageDetailOriginal": true,
+				"supportsReasoningSummary": true,
+				"supportsAllTurnsReasoningContext": false,
+				"supportsConfigurationUpdate": false,
+				"requiresReasoningOffJuiceInstruction": false,
+				"stripImageInput": false,
+				"reasoningEffortMap": {},
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresAssistantContentForToolCalls": false,
+				"isOpenRouterHost": false,
+				"isVercelGatewayHost": false,
+				"wireModelIdMode": "raw",
+				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
+				"supportsObfuscationOptOut": false,
+				"officialEndpoint": false,
+				"harmonyLeakMitigation": false,
+				"rejectRootObjectUnion": false,
+				"retryWithoutStrictOnGrammarError": false,
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false
+			},
+			"supportsComputerUse": false,
+			"compatConfig": {
+				"supportsReasoningEffort": true,
+				"includeEncryptedReasoning": true
+			}
+		},
+		"muse-spark-1.3-contributor": {
+			"id": "muse-spark-1.3-contributor",
+			"name": "Muse Spark 1.3 Contributor",
+			"api": "openai-responses",
+			"provider": "muse-code",
+			"baseUrl": "https://api.meta.ai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.1,
+				"output": 0.2,
+				"cacheRead": 0.002,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 131072,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh",
+					"max"
+				]
+			},
+			"identity": {
+				"class": "meta",
+				"family": "muse-spark",
+				"revision": "1.3.0"
+			},
+			"requiresGlyphTokenization": false,
+			"editPromptVariant": "compact",
+			"compat": {
+				"supportsDeveloperRole": false,
+				"supportsStrictMode": false,
+				"supportsReasoningEffort": true,
+				"supportsLongPromptCacheRetention": false,
+				"supportsPromptCacheBreakpoints": false,
+				"strictResponsesPairing": false,
+				"supportsImageDetailOriginal": true,
+				"supportsReasoningSummary": true,
+				"supportsAllTurnsReasoningContext": false,
+				"supportsConfigurationUpdate": false,
+				"requiresReasoningOffJuiceInstruction": false,
+				"stripImageInput": false,
+				"reasoningEffortMap": {},
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresAssistantContentForToolCalls": false,
+				"isOpenRouterHost": false,
+				"isVercelGatewayHost": false,
+				"wireModelIdMode": "raw",
+				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": true,
+				"supportsObfuscationOptOut": false,
+				"officialEndpoint": false,
+				"harmonyLeakMitigation": false,
+				"rejectRootObjectUnion": false,
+				"retryWithoutStrictOnGrammarError": false,
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false
+			},
+			"supportsComputerUse": false,
+			"compatConfig": {
+				"supportsReasoningEffort": true,
+				"includeEncryptedReasoning": true
+			}
 		}
 	},
 	"nanogpt": {
@@ -185877,7 +186375,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -185931,7 +186428,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"meta/muse-spark-1.3-contributor": {
 			"id": "meta/muse-spark-1.3-contributor",
@@ -185969,7 +186467,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -186023,7 +186520,8 @@
 				"rejectRootObjectUnion": false,
 				"retryWithoutStrictOnGrammarError": false,
 				"supportsPromptCacheKey": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"microsoft/MAI-DS-R1-FP8": {
 			"id": "microsoft/MAI-DS-R1-FP8",
@@ -264600,7 +265098,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -264644,6 +265141,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": false,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -264654,7 +265152,8 @@
 				"reasoningDeltasMayBeCumulative": false,
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"ox-alpha-free": {
 			"id": "ox-alpha-free",
@@ -273728,7 +274227,6 @@
 				"revision": "1.3.0"
 			},
 			"requiresGlyphTokenization": false,
-			"supportsComputerUse": false,
 			"compat": {
 				"supportsDeveloperRole": false,
 				"supportsStrictMode": false,
@@ -273772,6 +274270,7 @@
 				"isVercelGatewayHost": false,
 				"wireModelIdMode": "raw",
 				"alwaysSendMaxTokens": false,
+				"clampOutputToModelMax": false,
 				"supportsObfuscationOptOut": false,
 				"officialEndpoint": false,
 				"harmonyLeakMitigation": false,
@@ -273782,7 +274281,8 @@
 				"reasoningDeltasMayBeCumulative": false,
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false
-			}
+			},
+			"supportsComputerUse": false
 		},
 		"nemotron-3-super-free": {
 			"id": "nemotron-3-super-free",

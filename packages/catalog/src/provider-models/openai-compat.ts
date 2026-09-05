@@ -4360,7 +4360,7 @@ export function coreWeaveModelManagerOptions(
 // 15.75 Meta Model API
 // ---------------------------------------------------------------------------
 
-const META_MODEL_API_BASE_URL = "https://api.meta.ai/v1";
+const META_MODEL_API_BASE_URL = getDefaultModelDiscoveryBaseUrl("meta")!;
 const META_MUSE_SPARK_COST = { input: 1.25, output: 4.25, cacheRead: 0.15, cacheWrite: 0 } as const;
 // Contributor SKUs (`-contributor`): same model, discounted because prompts
 // are used for training.
@@ -4569,6 +4569,47 @@ export function metaModelManagerOptions(config?: MetaModelManagerConfig): ModelM
 				),
 		}),
 		staticModels: META_MUSE_STATIC_MODELS,
+	};
+}
+
+/** Muse Code shares Meta Model API's model capabilities and equivalent token pricing. */
+export const MUSE_CODE_STATIC_MODELS: readonly ModelSpec<"openai-responses">[] = META_MUSE_STATIC_MODELS.map(model => ({
+	...model,
+	provider: "muse-code",
+}));
+
+const MUSE_CODE_MODEL_BY_ID: Partial<Record<string, ModelSpec<"openai-responses">>> = Object.fromEntries(
+	MUSE_CODE_STATIC_MODELS.map(model => [model.id, model]),
+);
+
+function museCodeLineageSpec(id: string): ModelSpec<"openai-responses"> | undefined {
+	const model = museSparkLineageSpec(id);
+	return model ? { ...model, provider: "muse-code" } : undefined;
+}
+
+export function museCodeModelManagerOptions(config?: MetaModelManagerConfig): ModelManagerOptions<"openai-responses"> {
+	return {
+		...createOpenAICompatibleModelManagerOptions({
+			api: "openai-responses",
+			providerId: "muse-code",
+			defaultBaseUrl: META_MODEL_API_BASE_URL,
+			config,
+			headers: { "x-api-version": "1.0.0" },
+			dynamicModelsAuthoritative: true,
+			requireApiKey: true,
+			filterModel: (_entry, model) => !isExcludedModel("muse-code", model.id),
+			mapModel: (entry, defaults, reference) =>
+				mapWithBundledReference(
+					entry,
+					defaults,
+					reference ?? MUSE_CODE_MODEL_BY_ID[defaults.id] ?? museCodeLineageSpec(defaults.id),
+				),
+		}),
+		cacheProviderId: resolveModelCacheProviderId("muse-code", {
+			apiKey: config?.apiKey,
+			baseUrl: config?.baseUrl ?? META_MODEL_API_BASE_URL,
+		}),
+		staticModels: MUSE_CODE_STATIC_MODELS,
 	};
 }
 
