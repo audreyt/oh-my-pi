@@ -480,3 +480,83 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 		}
 	});
 });
+
+describe("AFM sidecar cache publication", () => {
+	async function seedStaleAfmCache(cacheDir: string): Promise<{
+		binPath: string;
+		helperPath: string;
+		oldStamp: string;
+		keepTmp: string;
+		keepLock: string;
+	}> {
+		await fs.promises.mkdir(cacheDir, { recursive: true });
+		const binPath = path.join(cacheDir, "omp-apple-fm");
+		const oldStamp = path.join(cacheDir, "omp-apple-fm.cafef00d");
+		const keepTmp = path.join(cacheDir, "omp-apple-fm.keep.tmp");
+		const keepLock = path.join(cacheDir, "omp-apple-fm.keep.lock");
+		const helperPath = path.join(cacheDir, "new-helper");
+		await Bun.write(binPath, "OLD_HELPER\n");
+		await Bun.write(oldStamp, "cafef00d\n");
+		await Bun.write(keepTmp, "tmp-artifact\n");
+		await Bun.write(keepLock, "lock-artifact\n");
+		await Bun.write(helperPath, "NEW_HELPER\n");
+		return { binPath, helperPath, oldStamp, keepTmp, keepLock };
+	}
+
+	it("cannot leave an old stamp claiming a replaced helper after a crash", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-cache-"));
+		const cacheDir = path.join(dir, "apple-fm");
+		const rename = fs.promises.rename.bind(fs.promises);
+		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async (source, target) => {
+			await rename(source, target);
+			if (path.basename(String(target)) === "omp-apple-fm") {
+				throw new Error("crash after publishing sidecar binary");
+			}
+		});
+		try {
+			const { binPath, helperPath, oldStamp, keepTmp, keepLock } = await seedStaleAfmCache(cacheDir);
+			await expect(
+				__internalsForTesting.installAfmSidecar(cacheDir, undefined, async () => helperPath),
+			).rejects.toThrow("crash after publishing sidecar binary");
+			expect(await Bun.file(oldStamp).exists()).toBe(false);
+			expect(await Bun.file(binPath).text()).toBe("NEW_HELPER\n");
+			expect(
+				await Bun.file(path.join(cacheDir, `omp-apple-fm.${__internalsForTesting.cacheIdentity()}`)).exists(),
+			).toBe(false);
+			expect(await Bun.file(keepTmp).text()).toBe("tmp-artifact\n");
+			expect(await Bun.file(keepLock).text()).toBe("lock-artifact\n");
+		} finally {
+			renameSpy.mockRestore();
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("does not replace the helper when stale stamp invalidation fails", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-cache-"));
+		const cacheDir = path.join(dir, "apple-fm");
+		const oldStamp = path.join(cacheDir, "omp-apple-fm.cafef00d");
+		const rm = fs.promises.rm.bind(fs.promises);
+		const rmSpy = spyOn(fs.promises, "rm").mockImplementation(async (target, options) => {
+			if (path.resolve(String(target)) === path.resolve(oldStamp)) {
+				throw Object.assign(new Error("operation not permitted"), { code: "EACCES" });
+			}
+			return rm(target, options);
+		});
+		try {
+			const { binPath, helperPath, keepTmp, keepLock } = await seedStaleAfmCache(cacheDir);
+			await expect(
+				__internalsForTesting.installAfmSidecar(cacheDir, undefined, async () => helperPath),
+			).rejects.toThrow("operation not permitted");
+			expect(await Bun.file(oldStamp).exists()).toBe(true);
+			expect(await Bun.file(binPath).text()).toBe("OLD_HELPER\n");
+			expect(
+				await Bun.file(path.join(cacheDir, `omp-apple-fm.${__internalsForTesting.cacheIdentity()}`)).exists(),
+			).toBe(false);
+			expect(await Bun.file(keepTmp).text()).toBe("tmp-artifact\n");
+			expect(await Bun.file(keepLock).text()).toBe("lock-artifact\n");
+		} finally {
+			rmSpy.mockRestore();
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+});
