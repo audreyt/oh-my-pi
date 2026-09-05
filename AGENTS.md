@@ -1,5 +1,21 @@
 # Development Rules
 
+## Precedence and follow-through
+
+User instructions for this turn override defaults in this file; system and developer instructions still bind.
+
+Persist until the requested result is complete and reviewable. Do not stop at a plan or a capability acknowledgment.
+
+Prepare authorized work before any ask. Commits, GitHub comments, and GitHub issues remain gated as written below — ask once, with the concrete result in hand, only if that authorization is still missing. Do not double-ask, and do not ask for reversible local work.
+
+Use the session's tools and modes. Provider strings in this file (`claude`, catalog ids, KDL selectors) are implementation examples, not brand or mode gates.
+
+Delegate only independent parallel slices, each with an explicit file, acceptance, and non-goal boundary.
+
+Be concise. Verify in proportion to the change: required package-local checks, plus natives/worker smoke (`omp --smoke-test`, `bun run test:rs`) when that contract moved. Do not add or repeat tests after those pass unless something new failed.
+
+If this file would block or divert the user's request, quote the line and distinguish a hard requirement from an interpretation.
+
 ## Default Context
 
 This repo contains multiple packages, but **`packages/coding-agent/`** is the primary focus. Unless otherwise specified, assume work refers to this package.
@@ -302,7 +318,7 @@ Test the contract the system exposes — not the easiest internal detail to asse
 - Compile-time guarantees → type checks/type tests, not runtime placeholders.
 - **Never source-grep.** A test that reads an implementation file (`.ts`/`.rs`/build script) and asserts on its _text_ — `expect(src).toContain("someCall()")`, `.toMatch(/import .../)`, `.not.toContain("oldName")`, or "comment must say X" — is banned. It tests how code _looks_, not what it _does_: it breaks on harmless refactors (comment reflow, rename, import reorder) and passes while the behavior is broken. Assert the observable contract instead (run the code, check output/state/error), use the runtime smoke probe for wiring you cannot exercise in-process, and enforce structural invariants (no value-import of X, no self-import) with a type test or an oxlint rule — never a string scan of the source. (Reading a file your code _wrote_ — apply-patch result, generated bundle, temp fixture — and asserting on that output is fine; that is behavior, not a source grep.)
 - Don't add tests for tiny low-risk changes unless they protect a real contract or fix a regression-prone edge case.
-- Prefer focused package-local verification for the changed area.
+- Prefer focused package-local verification for the changed area. Once the required checks pass, do not broaden or repeat testing unless a new change, failure, or unresolved concern appears.
 
 ## Changelog
 
