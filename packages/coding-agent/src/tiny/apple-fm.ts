@@ -1,6 +1,7 @@
 import type { TinyTitleLocalModelSpec } from "./models";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils";
 import { withFileLock } from "@oh-my-pi/pi-utils/file-lock";
 import bundledArm64Identity from "./apple-fm/prebuilt/arm64-apple-macosx26.0/digest.txt" with { type: "text" };
@@ -32,7 +33,19 @@ function sidecarOverride(): string | undefined {
 /** Env override disables the platform gate so tests can drive a fake sidecar anywhere. */
 export function foundationModelsUnavailableReason(spec: TinyTitleLocalModelSpec): string | undefined {
 	if (sidecarOverride()) return undefined;
-	return spec.unsupportedReason;
+	if (spec.unsupportedReason) return spec.unsupportedReason;
+	// Darwin 25 == macOS 26, when FoundationModels shipped. A 26.0-target
+	// sidecar cannot launch on older kernels, so the Swift `#available` guard
+	// never runs; refuse before install/spawn.
+	if (!darwinMeetsAfmRuntime()) return "unsupported_os";
+	return undefined;
+}
+
+/** Darwin 25 is macOS 26 (FoundationModels). Keep in sync with swiftTargetTriple. */
+function darwinMeetsAfmRuntime(platform: NodeJS.Platform = process.platform, release: string = os.release()): boolean {
+	if (platform !== "darwin") return false;
+	const major = Number.parseInt(release.split(".")[0] ?? "", 10);
+	return Number.isFinite(major) && major >= 25;
 }
 
 function abortError(signal?: AbortSignal): Error {
@@ -186,6 +199,9 @@ export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
 	if (process.platform !== "darwin") {
 		throw new Error("Apple Foundation Models is macOS-only");
 	}
+	if (!darwinMeetsAfmRuntime()) {
+		throw new Error("unsupported_os");
+	}
 
 	const dir = sidecarCacheDir();
 	await fs.promises.mkdir(dir, { recursive: true });
@@ -297,3 +313,8 @@ export async function completeAfmCore(input: {
 	if (!text) throw new Error("Apple Foundation Models sidecar returned empty text");
 	return text;
 }
+
+/** Test-only. Not part of the supported module API. */
+export const __internalsForTesting = {
+	darwinMeetsAfmRuntime,
+};
