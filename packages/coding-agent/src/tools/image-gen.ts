@@ -488,9 +488,13 @@ async function postImageEndpointRequest(options: {
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
 				headers: {
-				...configuredHeaders,
-				...options.headers,
-					Authorization: `Bearer ${key}`,
+					...configuredHeaders,
+					...options.headers,
+					// A caller-supplied Authorization (e.g. a Meta-compatible
+					// proxy's own credential via providers.meta.headers) wins
+					// over the generated bearer, matching
+					// resolveOpenAIRequestSetup.
+					Authorization: options.headers?.Authorization ?? `Bearer ${key}`,
 					"Content-Type": "application/json",
 					"User-Agent": USER_AGENT,
 				},
