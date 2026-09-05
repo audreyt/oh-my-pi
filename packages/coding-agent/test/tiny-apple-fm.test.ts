@@ -298,7 +298,12 @@ process.exit(1);
 process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
 `),
 			);
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+			expect(events).toEqual(["error"]);
 		} finally {
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}

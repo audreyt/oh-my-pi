@@ -608,7 +608,11 @@ export class TinyTitleClient {
 	): Promise<string | null> {
 		const options = normalizeTinyTitleGenerateOptions(optionsOrSignal);
 		if (!isTinyTitleLocalModelKey(modelKey)) return null;
-		if (options.signal?.aborted || this.#failedModels.has(modelKey)) return null;
+		if (options.signal?.aborted) return null;
+		if (this.#failedModels.has(modelKey)) {
+			this.#emitProgress({ modelKey, status: "error", name: getTinyTitleModelSpec(modelKey).repo });
+			return null;
+		}
 		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey)))
 			return this.#generateFoundationModels(modelKey, message, options.systemPrompt, options.signal);
 		const { promise, resolve } = Promise.withResolvers<string | null>();

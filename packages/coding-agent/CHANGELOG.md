@@ -12,6 +12,7 @@
 - Report oversized selected lines that cannot fit after read context, with a working raw recovery selector instead of a looping continuation hint ([#10775](https://github.com/can1357/oh-my-pi/issues/10775)).
 - Cancelled `afm-core` title generation and readiness probes now kill the sidecar process instead of leaving it running.
 - `afm-core` now reports `unsupported_os` on macOS earlier than 26 instead of launching a 26-target sidecar that dyld rejects.
+- Title generation now emits a terminal progress event when a previously failed local tiny model is skipped, so the download UI can unsubscribe.
 - Fixed WorkPool child sessions crashing during startup while constructing their incremental `yield` tool schema.
 - Commit summaries written in Vietnamese, Korean, and other accented scripts are no longer rejected for exceeding the length limit, and keep their accents as typed.
 
