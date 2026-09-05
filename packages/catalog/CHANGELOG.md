@@ -140,6 +140,10 @@
 
 - Added the `max` thinking-effort tier to Muse Spark 1.3 and its contributor variant.
 
+### Fixed
+
+- Existing model caches no longer hide Muse Spark 1.3's new `max` thinking effort after upgrading.
+
 ## [18.1.9] - 2026-09-04
 
 ### Added
