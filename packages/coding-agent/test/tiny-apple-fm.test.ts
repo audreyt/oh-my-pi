@@ -338,6 +338,7 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 	it("returns ok:false when the AFM readiness probe is aborted", async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		const pidPath = path.join(dir, "sidecar.pid");
+		const controller = new AbortController();
 		try {
 			const sidecar = writeFakeSidecar(
 				dir,
@@ -353,7 +354,6 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 			client.onProgress(event => {
 				if (event.modelKey === "afm-core") events.push(event.status);
 			});
-			const controller = new AbortController();
 			const pending = client.downloadModel("afm-core", { signal: controller.signal });
 			if (!(await Bun.file(pidPath).exists())) {
 				const { promise, resolve, reject } = Promise.withResolvers<void>();
@@ -391,6 +391,7 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 			);
 			await expect(client.downloadModel("afm-core")).resolves.toEqual({ ok: true });
 		} finally {
+			controller.abort();
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
