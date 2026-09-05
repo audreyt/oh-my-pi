@@ -35,6 +35,55 @@ export function foundationModelsUnavailableReason(spec: TinyTitleLocalModelSpec)
 	return spec.unsupportedReason;
 }
 
+function abortError(signal?: AbortSignal): Error {
+	return signal?.reason instanceof Error
+		? signal.reason
+		: new DOMException("The operation was aborted.", "AbortError");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+	if (signal?.aborted) throw abortError(signal);
+}
+
+async function settleSpawn(
+	proc: { kill: (signal?: NodeJS.Signals) => void; exited: Promise<number>; stdout: unknown; stderr: unknown },
+	signal?: AbortSignal,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	const stdoutP = new Response(proc.stdout as ReadableStream<Uint8Array>).text();
+	const stderrP = new Response(proc.stderr as ReadableStream<Uint8Array>).text();
+	if (!signal) {
+		const [stdout, stderr, exitCode] = await Promise.all([stdoutP, stderrP, proc.exited]);
+		return { stdout, stderr, exitCode };
+	}
+	const { promise: aborted, resolve } = Promise.withResolvers<void>();
+	const onAbort = (): void => resolve();
+	if (signal.aborted) resolve();
+	else signal.addEventListener("abort", onAbort, { once: true });
+	try {
+		const winner = await Promise.race([
+			Promise.all([stdoutP, stderrP, proc.exited]).then(([stdout, stderr, exitCode]) => ({
+				kind: "done" as const,
+				stdout,
+				stderr,
+				exitCode,
+			})),
+			aborted.then(() => ({ kind: "aborted" as const })),
+		]);
+		if (winner.kind === "aborted") {
+			try {
+				proc.kill("SIGKILL");
+			} catch {
+				// already exited
+			}
+			await proc.exited;
+			throw abortError(signal);
+		}
+		return { stdout: winner.stdout, stderr: winner.stderr, exitCode: winner.exitCode };
+	} finally {
+		signal.removeEventListener("abort", onAbort);
+	}
+}
+
 export function isAfmModelNotReady(error: unknown): boolean {
 	const text = error instanceof Error ? error.message : String(error);
 	return /\bmodelNotReady\b/.test(text);
@@ -99,18 +148,15 @@ async function publishSidecar(srcPath: string, destPath: string): Promise<void> 
 	fs.renameSync(tmpPath, destPath);
 }
 
-async function compileSidecar(srcPath: string, binPath: string): Promise<void> {
+async function compileSidecar(srcPath: string, binPath: string, signal?: AbortSignal): Promise<void> {
+	throwIfAborted(signal);
 	const target = swiftTargetTriple();
 	const proc = Bun.spawn({
 		cmd: ["xcrun", "--sdk", "macosx", "swiftc", "-O", "-parse-as-library", "-target", target, "-o", binPath, srcPath],
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const [, stderr, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
+	const { stderr, exitCode } = await settleSpawn(proc, signal);
 	if (exitCode !== 0) {
 		const detail = stderr.trim();
 		throw new Error(
@@ -128,7 +174,8 @@ async function compileSidecar(srcPath: string, binPath: string): Promise<void> {
  * Compile is locked and published by rename so two omp processes cannot
  * stamp a half-linked binary.
  */
-export async function ensureAfmSidecar(): Promise<string> {
+export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
+	throwIfAborted(signal);
 	const override = sidecarOverride();
 	if (override) {
 		if (!(await Bun.file(override).exists())) {
@@ -151,6 +198,7 @@ export async function ensureAfmSidecar(): Promise<string> {
 	return await withFileLock(
 		binPath,
 		async () => {
+			throwIfAborted(signal);
 			if ((await Bun.file(binPath).exists()) && (await Bun.file(stampPath).exists())) return binPath;
 			const bundled = await bundledSidecarPath();
 			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${hash}.tmp`);
@@ -159,7 +207,7 @@ export async function ensureAfmSidecar(): Promise<string> {
 					await publishSidecar(bundled, binPath);
 				} else {
 					await Bun.write(srcPath, sidecarSource);
-					await compileSidecar(srcPath, tmpPath);
+					await compileSidecar(srcPath, tmpPath, signal);
 					fs.renameSync(tmpPath, binPath);
 				}
 			} catch (error) {
@@ -187,19 +235,17 @@ export async function ensureAfmSidecar(): Promise<string> {
 	);
 }
 
-async function runSidecar(args: string[], stdin?: string): Promise<SidecarPayload> {
-	const bin = await ensureAfmSidecar();
+async function runSidecar(args: string[], stdin?: string, signal?: AbortSignal): Promise<SidecarPayload> {
+	throwIfAborted(signal);
+	const bin = await ensureAfmSidecar(signal);
+	throwIfAborted(signal);
 	const proc = Bun.spawn({
 		cmd: [bin, ...args],
 		stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const [stdout, stderr, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
+	const { stdout, stderr, exitCode } = await settleSpawn(proc, signal);
 	const line = stdout
 		.split(/\r?\n/)
 		.map(entry => entry.trim())
@@ -223,8 +269,8 @@ async function runSidecar(args: string[], stdin?: string): Promise<SidecarPayloa
 	return payload;
 }
 
-export async function probeAfmCore(): Promise<AfmStatus> {
-	const payload = await runSidecar(["status"]);
+export async function probeAfmCore(signal?: AbortSignal): Promise<AfmStatus> {
+	const payload = await runSidecar(["status"], undefined, signal);
 	return {
 		available: payload.available === true,
 		reason: payload.reason,
@@ -236,6 +282,7 @@ export async function completeAfmCore(input: {
 	instructions?: string;
 	prompt: string;
 	maxTokens?: number;
+	signal?: AbortSignal;
 }): Promise<string> {
 	const payload = await runSidecar(
 		["complete"],
@@ -244,6 +291,7 @@ export async function completeAfmCore(input: {
 			prompt: input.prompt,
 			...(input.maxTokens !== undefined ? { maxTokens: input.maxTokens } : {}),
 		}),
+		input.signal,
 	);
 	const text = payload.text?.trim() ?? "";
 	if (!text) throw new Error("Apple Foundation Models sidecar returned empty text");

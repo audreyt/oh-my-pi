@@ -335,4 +335,63 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
 	});
+	it("returns ok:false when the AFM readiness probe is aborted", async () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		const pidPath = path.join(dir, "sidecar.pid");
+		try {
+			const sidecar = writeFakeSidecar(
+				dir,
+				bunSidecar(`
+await Bun.write(${JSON.stringify(pidPath)}, String(process.pid));
+await Bun.sleep(60_000);
+process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
+			const controller = new AbortController();
+			const pending = client.downloadModel("afm-core", { signal: controller.signal });
+			if (!(await Bun.file(pidPath).exists())) {
+				const { promise, resolve, reject } = Promise.withResolvers<void>();
+				const watcher = fs.watch(dir, () => {
+					void Bun.file(pidPath)
+						.exists()
+						.then(exists => {
+							if (exists) resolve();
+						});
+				});
+				// Bound so a spawn hang fails this test instead of the runner timeout.
+				const timeout = AbortSignal.timeout(5_000);
+				const onTimeout = (): void => reject(new Error(`timed out waiting for sidecar pid file: ${pidPath}`));
+				timeout.addEventListener("abort", onTimeout, { once: true });
+				try {
+					if (await Bun.file(pidPath).exists()) resolve();
+					await promise;
+				} finally {
+					timeout.removeEventListener("abort", onTimeout);
+					watcher.close();
+				}
+			}
+			const pid = Number.parseInt((await Bun.file(pidPath).text()).trim(), 10);
+			expect(pid).toBeGreaterThan(0);
+			process.kill(pid, 0);
+			controller.abort();
+			await expect(pending).resolves.toEqual({ ok: false });
+			expect(events).toEqual(["initiate", "ready"]);
+			expect(() => process.kill(pid, 0)).toThrow();
+			fs.writeFileSync(
+				sidecar,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+`),
+			);
+			await expect(client.downloadModel("afm-core")).resolves.toEqual({ ok: true });
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });
