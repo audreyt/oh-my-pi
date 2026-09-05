@@ -5,8 +5,6 @@
 ### Added
 
 - Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939)).
-- Made Markdown links to existing local files and resources clickable while preserving their displayed URLs.
-- Added the `/switch <model>` command for session-only model changes from the prompt, with support for the same model selectors and completions used by `--model`; ACP `/model <model>` accepts these selectors as well.
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 
 ### Fixed

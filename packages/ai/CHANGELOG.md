@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
+
 ### Fixed
 
 - GitHub Copilot sign-in now requests only basic profile access, restoring login for Enterprise organizations that reject repository, gist, and Codespaces permissions ([#10656](https://github.com/can1357/oh-my-pi/issues/10656)).
@@ -152,7 +156,6 @@
 
 ### Added
 
-- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
 - Added Z.AI GLM Coding Plan usage tracking: credit-based `CREDIT_LIMIT` windows (5h + weekly) now surface in `omp usage` and the status line with the plan tier (`plan: lite/pro/max`).
 
 ### Fixed
