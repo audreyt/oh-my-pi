@@ -486,16 +486,16 @@ async function postImageEndpointRequest(options: {
 		options.apiKey,
 		async key => {
 			const configuredHeaders = await options.resolveHeaders?.();
-			const headers: Record<string, string> = {
-				...configuredHeaders,
-				...options.headers,
-				"Content-Type": "application/json",
-			};
-			// Caller-supplied Authorization/User-Agent under any casing (e.g. a
-			// Meta-compatible proxy via providers.meta.headers) win over the
-			// generated defaults, matching resolveOpenAIRequestSetup.
+			const headers: Record<string, string> = { ...configuredHeaders, ...options.headers };
+			// Caller-supplied headers under any casing (e.g. a Meta-compatible
+			// proxy via providers.meta.headers) win over the generated
+			// defaults, matching resolveOpenAIRequestSetup. Forcing the
+			// defaults as object keys would duplicate a caller field spelled
+			// with different casing (fetch coalesces the pair into one
+			// comma-joined value).
 			setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
 			setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
+			setHeaderIfAbsent(headers, "Content-Type", "application/json");
 			const resp = await options.fetchImpl(options.url, {
 				method: "POST",
 				headers,
