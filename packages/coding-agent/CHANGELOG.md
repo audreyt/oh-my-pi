@@ -835,6 +835,7 @@
 - Title generation now emits a terminal progress event when a previously failed local tiny model is skipped, so the download UI can unsubscribe.
 - A contended `afm-core` sidecar compile lock no longer disables title generation for the rest of the process.
 - `afm-core` now validates its sidecar cache under the compile lock so a concurrent install cannot return a mismatched helper.
+- Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
 - Fixed WorkPool child sessions crashing during startup while constructing their incremental `yield` tool schema.
 - Commit summaries written in Vietnamese, Korean, and other accented scripts are no longer rejected for exceeding the length limit, and keep their accents as typed.
 - Tool-scoped TTSR rules now match finalized arguments reliably when providers stream short or throttled tool calls ([#10910](https://github.com/can1357/oh-my-pi/issues/10910)).
