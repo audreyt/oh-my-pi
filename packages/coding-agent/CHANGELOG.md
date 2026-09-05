@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Muse Code sessions send a compact hashline edit description (~3 KB less per request); all other models keep the full prompt.
+
 ### Added
 
 - Added opt-in Apple Foundation Models (`afm-core`) session title generation for Darwin hosts ([#9683](https://github.com/can1357/oh-my-pi/pull/9683)).
@@ -14,6 +18,7 @@
 - A contended `afm-core` sidecar compile lock no longer disables title generation for the rest of the process.
 - `afm-core` now validates its sidecar cache under the compile lock so a concurrent install cannot return a mismatched helper.
 - Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
+
 
 ## [18.1.11] - 2026-09-05
 
