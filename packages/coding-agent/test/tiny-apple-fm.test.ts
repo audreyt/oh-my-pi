@@ -1,18 +1,20 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { resolveModels } from "@oh-my-pi/pi-coding-agent/cli/tiny-models-cli";
 import { getTinyLocalModelSpec } from "@oh-my-pi/pi-coding-agent/tiny/models";
 import { TinyTitleClient } from "../src/tiny/title-client";
-import {
+import * as appleFm from "../src/tiny/apple-fm";
+
+const {
 	AFM_CORE_SIDECAR_ENV,
 	completeAfmCore,
 	foundationModelsUnavailableReason,
 	probeAfmCore,
 	resolveBundledSidecarPath,
 	__internalsForTesting,
-} from "../src/tiny/apple-fm";
+} = appleFm;
 
 const previousSidecar = process.env[AFM_CORE_SIDECAR_ENV];
 
@@ -274,6 +276,37 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 `),
 			);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("treats sidecar install lock timeout as request-scoped", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = await writeFakeSidecar(
+				dir,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const spy = spyOn(appleFm, "completeAfmCore").mockRejectedValue(
+				new Error("Failed to acquire lock for /tmp/omp-apple-fm after 120 attempts"),
+			);
+			try {
+				const client = new TinyTitleClient();
+				const events: string[] = [];
+				client.onProgress(event => {
+					if (event.modelKey === "afm-core") events.push(event.status);
+				});
+				await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+				expect(events).not.toContain("error");
+				spy.mockRestore();
+				await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
+			} finally {
+				spy.mockRestore();
+			}
 		} finally {
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}

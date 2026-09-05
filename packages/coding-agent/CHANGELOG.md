@@ -13,6 +13,7 @@
 - Cancelled `afm-core` title generation and readiness probes now kill the sidecar process instead of leaving it running.
 - `afm-core` now reports `unsupported_os` on macOS earlier than 26 instead of launching a 26-target sidecar that dyld rejects.
 - Title generation now emits a terminal progress event when a previously failed local tiny model is skipped, so the download UI can unsubscribe.
+- A contended `afm-core` sidecar compile lock no longer disables title generation for the rest of the process.
 - Fixed WorkPool child sessions crashing during startup while constructing their incremental `yield` tool schema.
 - Commit summaries written in Vietnamese, Korean, and other accented scripts are no longer rejected for exceeding the length limit, and keep their accents as typed.
 
