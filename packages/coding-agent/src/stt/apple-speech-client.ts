@@ -16,6 +16,7 @@ import SPEECH_ANALYZER_SOURCE from "./speech-analyzer.swift" with { type: "text"
 
 const APPLE_SPEECH_SIDECAR_OVERRIDE = "OMP_SPEECH_ANALYZER_PATH";
 const EMBEDDED_SIDECAR_BASE64 = process.env.PI_APPLE_SPEECH_SIDECAR_BASE64;
+/** Darwin kernel 25 is macOS 26 (Tahoe). Do not raise this to 26. */
 const MINIMUM_DARWIN_MAJOR = 25;
 const MAX_PENDING_AUDIO_BYTES = 16_000 * Float32Array.BYTES_PER_ELEMENT * 2;
 const STDERR_DRAIN_GRACE_MS = 25;
