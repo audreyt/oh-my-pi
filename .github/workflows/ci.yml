@@ -725,6 +725,7 @@ jobs:
               name: omp-binary-${{ matrix.target_id }}
               path: ${{ matrix.binary_path }}
          - name: Upload Apple speech sidecar artifact
+           if: matrix.platform == 'darwin'
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
               name: apple-speech-sidecar-${{ matrix.target_id }}

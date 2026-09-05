@@ -40,6 +40,16 @@ if (locale.startsWith("exit:")) {
   process.stderr.write("fake sidecar stopped early\\n");
   process.exit(7);
 }
+if (locale.startsWith("late-fail:")) {
+  writeFileSync(locale.slice("late-fail:".length), "exiting");
+  process.stdout.end();
+  // Real-delay exception: the client only exposes its 25 ms drain grace
+  // internally, so the fake must outlive it on the platform clock to prove a
+  // late process failure still rejects instead of succeeding as partial text.
+  await Bun.sleep(100);
+  process.stderr.write("fake sidecar failed late\\n");
+  process.exit(9);
+}
 const chunks = [];
 for await (const chunk of Bun.stdin.stream()) chunks.push(Buffer.from(chunk));
 const audio = Buffer.concat(chunks);
@@ -52,11 +62,15 @@ emit({ type: "segment", text: "hello world", index: 0 });
 emit({ type: "done", text: "hello world" });
 `;
 
-async function waitForFileCreation(file: string): Promise<void> {
-	const directory = path.dirname(file);
-	const basename = path.basename(file);
-	for await (const event of fs.watch(directory)) {
-		if (event.filename === basename) return;
+// Bounded poll (ts-no-test-timers exception): the marker file is created by an
+// external sidecar process on the platform clock, so fake timers cannot drive
+// it. The timeout bounds the wait instead of hanging on a missed fs event.
+async function waitForFileCreation(file: string, timeoutMs = 10_000): Promise<void> {
+	const start = Date.now();
+	for (;;) {
+		if (await Bun.file(file).exists()) return;
+		if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for ${file}`);
+		await Bun.sleep(25);
 	}
 }
 
@@ -134,6 +148,14 @@ describe("AppleSpeechClient sidecar protocol", () => {
 		const stream = await client.startStream(`exit:${marker}`);
 		await exiting;
 		await expect(stream.stop()).rejects.toThrow(/fake sidecar stopped early|exited before completing/);
+	});
+
+	it("rejects when the process fails after stdout closes", async () => {
+		const marker = path.join(directory, "stream-late-fail");
+		const exiting = waitForFileCreation(marker);
+		const stream = await client.startStream(`late-fail:${marker}`);
+		await exiting;
+		await expect(stream.stop()).rejects.toThrow(/failed late|exited before completing/);
 	});
 });
 

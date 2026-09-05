@@ -1,8 +1,14 @@
+// Subpath imports: cli.ts imports this module for the smoke probe, and the
+// pi-utils barrel would pull native addons into normal CLI startup.
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getTinyModelsCacheDir, isEnoent, logger, readLines } from "@oh-my-pi/pi-utils";
+import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils/dirs";
+import { isEnoent } from "@oh-my-pi/pi-utils/fs-error";
+import * as logger from "@oh-my-pi/pi-utils/logger";
+import { readLines } from "@oh-my-pi/pi-utils/stream";
 import type { Subprocess } from "bun";
+import { isThenable } from "../utils/ipc";
 import { replaceFileAtomically } from "../utils/atomic-file";
 import { compileAppleSpeechSidecar } from "./apple-speech-compiler";
 import type { SttStreamHandle, SttStreamOptions } from "./asr-client";
@@ -10,6 +16,7 @@ import SPEECH_ANALYZER_SOURCE from "./speech-analyzer.swift" with { type: "text"
 
 const APPLE_SPEECH_SIDECAR_OVERRIDE = "OMP_SPEECH_ANALYZER_PATH";
 const EMBEDDED_SIDECAR_BASE64 = process.env.PI_APPLE_SPEECH_SIDECAR_BASE64;
+/** Darwin kernel 25 is macOS 26 (Tahoe). Do not raise this to 26. */
 const MINIMUM_DARWIN_MAJOR = 25;
 const MAX_PENDING_AUDIO_BYTES = 16_000 * Float32Array.BYTES_PER_ELEMENT * 2;
 const STDERR_DRAIN_GRACE_MS = 25;
@@ -53,13 +60,6 @@ function unavailableStatus(error: unknown): AppleSpeechStatus {
 	};
 }
 
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-	return (
-		((typeof value === "object" && value !== null) || typeof value === "function") &&
-		"then" in value &&
-		typeof value.then === "function"
-	);
-}
 
 function sha256(data: string | Uint8Array): string {
 	return new Bun.CryptoHasher("sha256").update(data).digest("hex");
@@ -159,7 +159,10 @@ async function resolveAppleSpeechExecutable(): Promise<string> {
 }
 
 function defaultExecutableResolver(): Promise<string> {
-	resolvedExecutable ??= resolveAppleSpeechExecutable();
+	resolvedExecutable ??= resolveAppleSpeechExecutable().catch((error: unknown) => {
+		resolvedExecutable = null;
+		throw error;
+	});
 	return resolvedExecutable;
 }
 
@@ -345,6 +348,8 @@ export class AppleSpeechClient {
 		const stdoutAbort = new AbortController();
 		const pendingWrites = new Set<Promise<void>>();
 		let pendingAudioBytes = 0;
+		const collectedSegments: string[] = [];
+		let lastPartial = "";
 		let readySeen = false;
 		let settled = false;
 		let closing = false;
@@ -417,17 +422,38 @@ export class AppleSpeechClient {
 						}
 						break;
 					case "partial":
-						if (!settled && event.text !== undefined) options.onPartial?.(event.text);
+						if (!settled && event.text !== undefined) {
+							lastPartial = event.text;
+							options.onPartial?.(event.text);
+						}
 						break;
 					case "segment":
-						if (!settled && event.text !== undefined) options.onSegment?.(event.text, event.index ?? 0);
+						if (!settled && event.text !== undefined) {
+							collectedSegments.push(event.text);
+							lastPartial = "";
+							options.onSegment?.(event.text, event.index ?? collectedSegments.length - 1);
+						}
 						break;
 					case "done":
-						finish(event.text ?? "");
+						finish(event.text ?? (collectedSegments.join(" ") || lastPartial));
 						break;
 					case "error":
 						fail(new Error(event.error ?? "Apple SpeechAnalyzer stream failed."));
 						break;
+				}
+			}
+			if (!settled) {
+				const exitCode = await Promise.race([proc.exited, Bun.sleep(STDERR_DRAIN_GRACE_MS).then(() => null)]);
+				// A null exitCode means stdout closed before the process settled:
+				// leave the stream unresolved so the `proc.exited` handler below
+				// reports the eventual outcome instead of masking a later failure
+				// as a partial success.
+				if (!settled && exitCode !== null) {
+					if (exitCode === 0) {
+						finish(collectedSegments.join(" ") || lastPartial);
+					} else {
+						fail(new Error(`Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
+					}
 				}
 			}
 		})().catch(fail);
@@ -437,7 +463,11 @@ export class AppleSpeechClient {
 				await Promise.race([stderrDone, Bun.sleep(STDERR_DRAIN_GRACE_MS)]);
 				const error = stderr.trim();
 				if (!settled) {
-					fail(new Error(error || `Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
+					if (exitCode === 0 || exitCode === null) {
+						finish(collectedSegments.join(" ") || lastPartial);
+					} else {
+						fail(new Error(error || `Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
+					}
 				} else if (exitCode !== 0 && error) {
 					logger.debug("stt: Apple SpeechAnalyzer stderr", { exitCode, error });
 				}
@@ -449,7 +479,7 @@ export class AppleSpeechClient {
 			.catch(fail);
 
 		const trackBackpressure = (result: unknown, byteLength: number): void => {
-			if (!isPromiseLike(result)) return;
+			if (!isThenable(result)) return;
 			pendingAudioBytes += byteLength;
 			const pending = Promise.resolve(result)
 				.then(() => {})
@@ -472,7 +502,7 @@ export class AppleSpeechClient {
 					const bytes = new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength);
 					const write = proc.stdin.write(bytes);
 					const flush = proc.stdin.flush();
-					if (isPromiseLike(write)) {
+					if (isThenable(write)) {
 						trackBackpressure(write, audio.byteLength);
 						trackBackpressure(flush, 0);
 					} else {
