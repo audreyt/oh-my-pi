@@ -183,48 +183,25 @@ async function compileSidecar(srcPath: string, binPath: string, signal?: AbortSi
 	await fs.promises.chmod(binPath, 0o755);
 }
 
-/**
- * Drop stale identity stamps (and leftover copy artifacts) under the install
- * lock. `.tmp` / `.lock` names stay so an in-flight compile or flock handle is
- * not deleted. Fail closed: a stamp that cannot be removed must not be followed
- * by replacing the shared binary.
- */
-async function invalidateStaleSidecarStamps(
-	dir: string,
-	currentStampName: string,
-	signal?: AbortSignal,
-): Promise<void> {
-	for await (const entry of new Bun.Glob("omp-apple-fm.*").scan({ cwd: dir, onlyFiles: true })) {
-		throwIfAborted(signal);
-		if (entry === currentStampName || entry.endsWith(".tmp") || entry.endsWith(".lock")) continue;
-		await fs.promises.rm(path.join(dir, entry), { force: true });
-	}
-}
-
-/** Locked cache install. Stale stamps are invalidated before the binary is replaced. */
+/** Locked cache install. Published helper is named for cacheIdentity. */
 async function installAfmSidecar(
 	dir: string,
 	signal?: AbortSignal,
 	resolveBundledSidecar: () => Promise<string | undefined> = bundledSidecarPath,
+	identity: string = cacheIdentity(),
 ): Promise<string> {
 	await fs.promises.mkdir(dir, { recursive: true });
-	const hash = cacheIdentity();
-	const srcPath = path.join(dir, "sidecar.swift");
-	const binPath = path.join(dir, "omp-apple-fm");
-	const stampName = `omp-apple-fm.${hash}`;
-	const stampPath = path.join(dir, stampName);
-	const binFile = Bun.file(binPath);
-	const stampFile = Bun.file(stampPath);
+	const srcPath = path.join(dir, `sidecar-${identity}.swift`);
+	const binPath = path.join(dir, `omp-apple-fm-${identity}`);
 
 	return await withFileLock(
 		binPath,
 		async () => {
 			throwIfAborted(signal);
-			if ((await binFile.exists()) && (await stampFile.exists())) return binPath;
-			await invalidateStaleSidecarStamps(dir, stampName, signal);
+			if (await Bun.file(binPath).exists()) return binPath;
 			throwIfAborted(signal);
 			const bundled = await resolveBundledSidecar();
-			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${hash}.tmp`);
+			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${identity}.tmp`);
 			try {
 				if (bundled) {
 					await publishSidecar(bundled, binPath);
@@ -235,6 +212,8 @@ async function installAfmSidecar(
 				}
 			} catch (error) {
 				await fs.promises.rm(tmpPath, { force: true });
+				await fs.promises.rm(srcPath, { force: true });
+				await fs.promises.rm(`${binPath}.${process.pid}.copy`, { force: true });
 				if (!bundled) {
 					throw new Error(
 						`${error instanceof Error ? error.message : String(error)}. afm-core needs the bundled Apple Silicon sidecar or Xcode/CLT to compile one.`,
@@ -242,7 +221,6 @@ async function installAfmSidecar(
 				}
 				throw error;
 			}
-			await Bun.write(stampPath, `${hash}\n`);
 			return binPath;
 		},
 		{ retries: 120, retryDelayMs: 250, signal },
@@ -252,10 +230,9 @@ async function installAfmSidecar(
 /**
  * Resolve a runnable sidecar. Env override wins (tests / prebuilt). Otherwise
  * compile the bundled Swift into the tiny-models cache on first use.
- * Compile is locked and published by rename so two omp processes cannot
- * stamp a half-linked binary. Identity stamps for other builds are removed
- * under that lock before the shared binary is replaced, so a crash cannot
- * leave an old marker claiming a different helper.
+ * Compile is locked and published by rename onto an identity-specific path
+ * so two omp processes cannot publish a half-linked binary, and a later
+ * install for a different identity cannot overwrite a path already returned.
  */
 export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
 	throwIfAborted(signal);
