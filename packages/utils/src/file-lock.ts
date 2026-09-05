@@ -31,6 +31,32 @@ function tryAcquireLock(lockPath: string): NativeFileLock | null {
 	return lock.acquired ? lock : null;
 }
 
+async function delay(ms: number, signal?: AbortSignal): Promise<void> {
+	if (signal?.aborted) {
+		throw signal.reason instanceof Error
+			? signal.reason
+			: new DOMException("The operation was aborted.", "AbortError");
+	}
+	if (!signal) {
+		await Bun.sleep(ms);
+		return;
+	}
+	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	const timer = setTimeout(resolve, ms);
+	const onAbort = (): void => {
+		reject(
+			signal.reason instanceof Error ? signal.reason : new DOMException("The operation was aborted.", "AbortError"),
+		);
+	};
+	signal.addEventListener("abort", onAbort, { once: true });
+	try {
+		await promise;
+	} finally {
+		clearTimeout(timer);
+		signal.removeEventListener("abort", onAbort);
+	}
+}
+
 async function acquireLock(filePath: string, options: FileLockOptions = {}): Promise<NativeFileLock> {
 	const retries = options.retries ?? DEFAULT_OPTIONS.retries;
 	const retryDelayMs = options.retryDelayMs ?? DEFAULT_OPTIONS.retryDelayMs;
@@ -44,7 +70,7 @@ async function acquireLock(filePath: string, options: FileLockOptions = {}): Pro
 		}
 		const lock = tryAcquireLock(lockPath);
 		if (lock) return lock;
-		if (attempt + 1 < retries) await Bun.sleep(retryDelayMs);
+		if (attempt + 1 < retries) await delay(retryDelayMs, options.signal);
 	}
 
 	throw new Error(`Failed to acquire lock for ${filePath} after ${retries} attempts`);

@@ -127,8 +127,8 @@ describe("native file-lock ownership", () => {
 		try {
 			const controller = new AbortController();
 			const pending = withFileLock(target, async () => "never", {
-				retries: 40,
-				retryDelayMs: 50,
+				retries: 8,
+				retryDelayMs: 30_000,
 				signal: controller.signal,
 			});
 			controller.abort();
@@ -136,5 +136,5 @@ describe("native file-lock ownership", () => {
 		} finally {
 			holder.release();
 		}
-	});
+	}, 2_000);
 });
