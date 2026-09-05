@@ -1238,7 +1238,7 @@ describe("imageGenTool", () => {
 		expect(result.details?.provider).toBe("meta");
 	});
 
-	it("lets a lowercase Meta authorization header win over the generated bearer", async () => {
+	it("lets lowercase Meta authorization and user-agent headers win over generated defaults", async () => {
 		let requestHeaders: Headers | undefined;
 
 		const fetchMock: typeof fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -1259,7 +1259,9 @@ describe("imageGenTool", () => {
 				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
 				getProviderBaseUrl: () => undefined,
 				getProviderHeaders: (provider: string) =>
-					provider === "meta" ? { authorization: "Bearer proxy-credential" } : undefined,
+					provider === "meta"
+						? { authorization: "Bearer proxy-credential", "User-Agent": "proxy-agent/1.0" }
+						: undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1279,6 +1281,7 @@ describe("imageGenTool", () => {
 		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
 
 		expect(requestHeaders?.get("authorization")).toBe("Bearer proxy-credential");
+		expect(requestHeaders?.get("user-agent")).toBe("proxy-agent/1.0");
 		expect(result.details?.provider).toBe("meta");
 	});
 });
