@@ -23,8 +23,6 @@ export interface TinyTitleLocalModelSpec {
 	unsupportedReason?: string;
 	/** Reason the ONNX backend refuses this model before loading the runtime; the MLX backend ignores it. */
 	onnxUnsupportedReason?: string;
-	/** Legacy platform gate for `foundation-models` (e.g. macOS-only); `undefined` when usable. */
-	unsupportedReason?: string;
 }
 
 export const TINY_TITLE_LOCAL_MODELS = [

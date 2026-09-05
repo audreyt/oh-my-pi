@@ -60,7 +60,6 @@ function unavailableStatus(error: unknown): AppleSpeechStatus {
 	};
 }
 
-
 function sha256(data: string | Uint8Array): string {
 	return new Bun.CryptoHasher("sha256").update(data).digest("hex");
 }
@@ -515,7 +514,7 @@ export class AppleSpeechClient {
 			stop: async () => {
 				if (!closing && !settled) {
 					closing = true;
-					await Promise.all([...pendingWrites]);
+					await Promise.all(pendingWrites);
 					try {
 						proc.stdin.end();
 					} catch (error) {

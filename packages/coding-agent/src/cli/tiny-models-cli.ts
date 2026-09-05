@@ -8,7 +8,6 @@ import {
 	TINY_LOCAL_MODELS,
 	type TinyLocalModelKey,
 } from "../tiny/models";
-import { foundationModelsUnavailableReason } from "../tiny/apple-fm";
 import { shutdownTinyTitleClient, tinyTitleClient, tinyWorkerUsesMlx } from "../tiny/title-client";
 import type { TinyTitleProgressEvent } from "../tiny/title-protocol";
 

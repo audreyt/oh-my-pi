@@ -57,7 +57,6 @@ interface KeenableSearchPayload {
 	results?: unknown;
 }
 
-
 /** Exported for testing. Builds the Keenable search JSON body. */
 export function buildRequestBody(params: KeenableSearchParams): Record<string, unknown> {
 	const numResults = clampNumResults(params.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
@@ -201,7 +200,6 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 		await call({
 			...keenableParams,
 			recency: undefined,
-
 		}),
 		numResults,
 		authMode,
