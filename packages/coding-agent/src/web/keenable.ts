@@ -1,5 +1,5 @@
 import { type FetchImpl, getEnvApiKey } from "@oh-my-pi/pi-ai";
-import { APP_NAME } from "@oh-my-pi/pi-utils";
+import { APP_NAME, asRecord } from "@oh-my-pi/pi-utils";
 import type { AgentStorage } from "../session/agent-storage";
 import { findCredential, withHardTimeout } from "./search/providers/utils";
 
@@ -64,10 +64,7 @@ export async function fetchKeenablePage(options: KeenableFetchOptions): Promise<
 	} catch {
 		return null;
 	}
-	if (!payload || typeof payload !== "object" || Array.isArray(payload) || !("content" in payload)) {
-		return null;
-	}
-	const content = payload.content;
+	const content = asRecord(payload)?.content;
 	if (typeof content !== "string") return null;
 	const trimmed = content.trim();
 	return trimmed.length > 0 ? trimmed : null;
