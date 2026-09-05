@@ -341,6 +341,8 @@ export class AppleSpeechClient {
 		const stdoutAbort = new AbortController();
 		const pendingWrites = new Set<Promise<void>>();
 		let pendingAudioBytes = 0;
+		const collectedSegments: string[] = [];
+		let lastPartial = "";
 		let readySeen = false;
 		let settled = false;
 		let closing = false;
@@ -413,17 +415,38 @@ export class AppleSpeechClient {
 						}
 						break;
 					case "partial":
-						if (!settled && event.text !== undefined) options.onPartial?.(event.text);
+						if (!settled && event.text !== undefined) {
+							lastPartial = event.text;
+							options.onPartial?.(event.text);
+						}
 						break;
 					case "segment":
-						if (!settled && event.text !== undefined) options.onSegment?.(event.text, event.index ?? 0);
+						if (!settled && event.text !== undefined) {
+							collectedSegments.push(event.text);
+							lastPartial = "";
+							options.onSegment?.(event.text, event.index ?? collectedSegments.length - 1);
+						}
 						break;
 					case "done":
-						finish(event.text ?? "");
+						finish(event.text ?? (collectedSegments.join(" ") || lastPartial));
 						break;
 					case "error":
 						fail(new Error(event.error ?? "Apple SpeechAnalyzer stream failed."));
 						break;
+				}
+			}
+			if (!settled) {
+				const exitCode = await Promise.race([proc.exited, Bun.sleep(STDERR_DRAIN_GRACE_MS).then(() => null)]);
+				// A null exitCode means stdout closed before the process settled:
+				// leave the stream unresolved so the `proc.exited` handler below
+				// reports the eventual outcome instead of masking a later failure
+				// as a partial success.
+				if (!settled && exitCode !== null) {
+					if (exitCode === 0) {
+						finish(collectedSegments.join(" ") || lastPartial);
+					} else {
+						fail(new Error(`Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
+					}
 				}
 			}
 		})().catch(fail);
@@ -433,7 +456,11 @@ export class AppleSpeechClient {
 				await Promise.race([stderrDone, Bun.sleep(STDERR_DRAIN_GRACE_MS)]);
 				const error = stderr.trim();
 				if (!settled) {
-					fail(new Error(error || `Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
+					if (exitCode === 0 || exitCode === null) {
+						finish(collectedSegments.join(" ") || lastPartial);
+					} else {
+						fail(new Error(error || `Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
+					}
 				} else if (exitCode !== 0 && error) {
 					logger.debug("stt: Apple SpeechAnalyzer stderr", { exitCode, error });
 				}
