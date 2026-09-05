@@ -437,8 +437,12 @@ export class AppleSpeechClient {
 			}
 			if (!settled) {
 				const exitCode = await Promise.race([proc.exited, Bun.sleep(STDERR_DRAIN_GRACE_MS).then(() => null)]);
-				if (!settled) {
-					if (exitCode === 0 || exitCode === null) {
+				// A null exitCode means stdout closed before the process settled:
+				// leave the stream unresolved so the `proc.exited` handler below
+				// reports the eventual outcome instead of masking a later failure
+				// as a partial success.
+				if (!settled && exitCode !== null) {
+					if (exitCode === 0) {
 						finish(collectedSegments.join(" ") || lastPartial);
 					} else {
 						fail(new Error(`Apple SpeechAnalyzer exited before completing (code ${exitCode}).`));
