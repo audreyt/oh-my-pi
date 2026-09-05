@@ -1238,7 +1238,7 @@ describe("imageGenTool", () => {
 		expect(result.details?.provider).toBe("meta");
 	});
 
-	it("lets lowercase Meta authorization and user-agent headers win over generated defaults", async () => {
+	it("lets lowercase Meta headers win over generated defaults without duplication", async () => {
 		let requestHeaders: Headers | undefined;
 
 		const fetchMock: typeof fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -1260,7 +1260,11 @@ describe("imageGenTool", () => {
 				getProviderBaseUrl: () => undefined,
 				getProviderHeaders: (provider: string) =>
 					provider === "meta"
-						? { authorization: "Bearer proxy-credential", "User-Agent": "proxy-agent/1.0" }
+						? {
+								authorization: "Bearer proxy-credential",
+								"User-Agent": "proxy-agent/1.0",
+								"content-type": "application/json",
+							}
 						: undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
@@ -1282,6 +1286,9 @@ describe("imageGenTool", () => {
 
 		expect(requestHeaders?.get("authorization")).toBe("Bearer proxy-credential");
 		expect(requestHeaders?.get("user-agent")).toBe("proxy-agent/1.0");
+		// A forced default key would coalesce with the lowercase caller field
+		// into "application/json, application/json".
+		expect(requestHeaders?.get("content-type")).toBe("application/json");
 		expect(result.details?.provider).toBe("meta");
 	});
 });
