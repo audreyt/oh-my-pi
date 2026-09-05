@@ -40,6 +40,7 @@ export class STTController {
 	#toggling = false;
 	#stopAfterStart = false;
 	#disposed = false;
+	readonly #lifetimeAbort = new AbortController();
 	readonly #createCapture: CaptureFactory;
 
 	// Live streaming capture.
@@ -109,14 +110,15 @@ export class STTController {
 				options.showStatus(msg);
 			};
 			if (spec.engine === "speech-analyzer") {
-				const availability = await appleSpeechClient.status(language);
+				const signal = this.#lifetimeAbort.signal;
+				const availability = await appleSpeechClient.status(language, signal);
 				if (!availability.success || !availability.available || !availability.supported) {
 					throw new Error(availability.error ?? "Apple SpeechAnalyzer is unavailable for the selected locale.");
 				}
 				if (!availability.installed) {
 					const locale = availability.locale ?? language?.trim() ?? "system locale";
 					status(`Preparing system-managed Apple speech recognition (${locale})...`);
-					await appleSpeechClient.prepare(language);
+					await appleSpeechClient.prepare(language, signal);
 				}
 			} else if (await isSttModelCached(spec.key)) {
 				// Loading the multi-hundred-MB worker model used to block before
@@ -128,10 +130,12 @@ export class STTController {
 					status(`Downloading speech model ${progress.label} (${progress.percent}%)`),
 				);
 			}
+			if (this.#disposed) return false;
 			if (wroteStatus) options.showStatus("");
 			this.#resolvedDependencyKey = dependencyKey;
 			return true;
 		} catch (err) {
+			if (this.#disposed) return false;
 			const msg = err instanceof Error ? err.message : "Failed to setup STT dependencies";
 			options.showWarning(msg);
 			logger.error("STT dependency setup failed", { error: msg });
@@ -157,6 +161,7 @@ export class STTController {
 
 	async #start(editor: Editor, options: ToggleOptions): Promise<void> {
 		if (!(await this.#ensureDeps(options))) return;
+		if (this.#disposed) return;
 		await this.#startStreaming(editor, options);
 	}
 
@@ -175,6 +180,7 @@ export class STTController {
 	}
 
 	async #startStreaming(editor: Editor, options: ToggleOptions): Promise<void> {
+		if (this.#disposed) return;
 		const spec = resolveSttModelSpec(settings.get("stt.modelName") as string | undefined);
 		const language = settings.get("stt.language") as string | undefined;
 		this.#streamEditor = editor;
@@ -220,6 +226,11 @@ export class STTController {
 			return;
 		}
 		this.#stream = stream;
+		if (this.#disposed) {
+			stream.cancel();
+			this.#cleanupStream();
+			return;
+		}
 		let recorder: CaptureHandle;
 		try {
 			recorder = this.#createCapture((error, samples) => {
@@ -330,6 +341,7 @@ export class STTController {
 
 	dispose(): void {
 		this.#disposed = true;
+		this.#lifetimeAbort.abort();
 		if (this.#streamAbort) {
 			this.#streamAbort.abort();
 			this.#streamAbort = null;
