@@ -9,7 +9,6 @@ import {
 	AFM_CORE_SIDECAR_ENV,
 	completeAfmCore,
 	foundationModelsUnavailableReason,
-	isAfmRequestScopedFailure,
 	probeAfmCore,
 	resolveBundledSidecarPath,
 } from "../src/tiny/apple-fm";
@@ -69,14 +68,6 @@ describe("afm-core title registry", () => {
 		expect(resolveBundledSidecarPath("./omp-apple-fm-py3pdx4g.", "/pkg/dist")).toBe(
 			path.join("/pkg/dist", "omp-apple-fm-py3pdx4g."),
 		);
-	});
-
-	it("treats generation failures as request-scoped and availability faults as terminal", () => {
-		expect(isAfmRequestScopedFailure(new Error("apple_fm_failed: modelNotReady"))).toBe(true);
-		expect(isAfmRequestScopedFailure(new Error("apple_fm_failed: Generation was refused"))).toBe(true);
-		expect(isAfmRequestScopedFailure(new Error("Apple Foundation Models sidecar returned empty text"))).toBe(true);
-		expect(isAfmRequestScopedFailure(new Error("apple_fm_failed: deviceNotEligible"))).toBe(false);
-		expect(isAfmRequestScopedFailure(new Error("failed to compile Apple Foundation Models sidecar"))).toBe(false);
 	});
 });
 
@@ -263,6 +254,35 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 		}
 	});
 
+	it("treats empty sidecar text as request-scoped", async () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = writeFakeSidecar(
+				dir,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ text: "   " }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBeNull();
+			expect(events).not.toContain("error");
+			fs.writeFileSync(
+				sidecar,
+				bunSidecar(`
+process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
+`),
+			);
+			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("disables AFM after a terminal failure", async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-afm-"));
 		try {
@@ -299,12 +319,17 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
 			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
 			const controller = new AbortController();
 			const startedAt = Date.now();
 			const pending = client.generate("afm-core", "fix the login button", { signal: controller.signal });
 			controller.abort();
 			await expect(pending).resolves.toBeNull();
 			expect(Date.now() - startedAt).toBeLessThan(1500);
+			expect(events).toEqual(["initiate", "ready"]);
 			await expect(client.generate("afm-core", "fix the login button")).resolves.toBe("Fix login button");
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
