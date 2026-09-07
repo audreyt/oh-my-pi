@@ -742,6 +742,17 @@ function isScriptEntryPath(entryPath: string): boolean {
 /** Basenames of JS runtimes: only when the process image is one of these does `argv[1]` name the entry script. */
 const JS_RUNTIME_BASENAMES: ReadonlySet<string> = new Set(["bun", "bun.exe", "node", "node.exe"]);
 
+/**
+ * Whether a path names Bun's virtual bundle filesystem rather than the disk.
+ *
+ * Inside a `bun build --compile` binary, `Bun.main` reports the bundled entry
+ * (e.g. `/$bunfs/root/omp`), not the on-disk executable. Only the process
+ * image (`process.execPath`) is a writable install path.
+ */
+function isBunfsPath(candidate: string): boolean {
+	return candidate.replace(/\\/g, "/").startsWith("/$bunfs/");
+}
+
 export interface RunningEntryOverrides {
 	bunMain?: unknown;
 	argv1?: unknown;
@@ -752,24 +763,26 @@ export interface RunningEntryOverrides {
  * Absolute path of the running omp entry, or undefined when it cannot be
  * determined safely.
  *
- * A compiled binary reports itself via `Bun.main`, as does `bun <script>`
- * (the script path). Under `node <script>` there is no `Bun.main`, and
- * `argv[1]` names the entry only because the process image is the runtime
- * itself — in a compiled binary `argv[1]` is the first user argument and must
- * never be treated as an install path, so it is consulted only on a runtime
- * image. TypeScript source runs (local development) resolve to undefined so
- * target selection keeps using the PATH launcher, exactly as before.
+ * Under `bun <script>` `Bun.main` names the script. Under `node <script>`
+ * there is no `Bun.main`, and `argv[1]` names the entry only because the
+ * process image is the runtime itself. A compiled binary reports its bundled
+ * entry via `Bun.main` (`/$bunfs/root/omp`), which is not on disk — the
+ * running install is the process image (`process.execPath`) instead. In a
+ * compiled binary `argv[1]` is the first user argument and must never be
+ * treated as an install path, so it is consulted only on a runtime image.
+ * TypeScript source runs (local development) resolve to undefined so target
+ * selection keeps using the PATH launcher, exactly as before.
  */
 export function resolveRunningEntryPath(overrides: RunningEntryOverrides = {}): string | undefined {
 	// Presence (not nullishness) selects the source, so tests can force the
 	// no-Bun branch even though the real `Bun.main` is a string under `bun test`.
 	const bunMain = "bunMain" in overrides ? overrides.bunMain : typeof Bun !== "undefined" ? Bun.main : undefined;
+	const execPath = "execPath" in overrides && overrides.execPath !== undefined ? overrides.execPath : process.execPath;
 	let raw: string;
 	if (typeof bunMain === "string" && bunMain.length > 0) {
+		if (isBunfsPath(bunMain)) return execPath;
 		raw = bunMain;
 	} else {
-		const execPath =
-			"execPath" in overrides && overrides.execPath !== undefined ? overrides.execPath : process.execPath;
 		const argv1 = "argv1" in overrides ? overrides.argv1 : process.argv[1];
 		if (!JS_RUNTIME_BASENAMES.has(path.basename(execPath).toLowerCase())) return undefined;
 		if (typeof argv1 !== "string" || argv1.length === 0) return undefined;

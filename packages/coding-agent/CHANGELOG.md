@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- Fixed `omp update` for standalone binaries resolving the update target to the bundled entry instead of the running executable.
 - Keyless image proxies no longer receive a synthetic bearer token; explicitly configured authorization headers are preserved.
 ### Added
 

@@ -1636,8 +1636,21 @@ describe("update-cli running-install targeting", () => {
 		packages: { pkg: "@oh-my-pi/pi-coding-agent", natives: "@oh-my-pi/pi-natives" },
 	};
 
-	it("reports the compiled binary from Bun.main", () => {
+	it("reports a real executable path from Bun.main", () => {
 		expect(resolveRunningEntryPath({ bunMain: "/usr/local/bin/omp", argv1: "update" })).toBe("/usr/local/bin/omp");
+	});
+
+	it("maps the compiled bundle entry to the process image", () => {
+		// Failure mode: inside a `bun build --compile` binary Bun.main names
+		// the bundled entry (/$bunfs/root/omp), not the on-disk executable,
+		// so the updater targeted the virtual path and died with ENOENT.
+		expect(
+			resolveRunningEntryPath({
+				bunMain: "/$bunfs/root/omp",
+				execPath: "/Users/au/.local/bin/omp",
+				argv1: "update",
+			}),
+		).toBe("/Users/au/.local/bin/omp");
 	});
 
 	it("reports the entry script for bun script launches", () => {
