@@ -91,6 +91,7 @@
 
 ### Added
 
+- `withFileLock` now rejects with a typed `LockAcquireError` when the retry budget is exhausted, so callers can detect contention without matching the message text.
 - Added public `acquireFileLock()` and `FileLockHandle` APIs for holding and explicitly releasing exclusive OS-backed file locks.
 
 ### Fixed
