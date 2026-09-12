@@ -149,8 +149,6 @@
 
 ## [18.1.12] - 2026-09-06
 
-- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
-- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 - Fixed edit and write results to report the formatted bytes actually committed by LSP writethrough.
 
 ### Added
