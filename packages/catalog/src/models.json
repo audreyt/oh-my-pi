@@ -55417,7 +55417,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"compat": {
@@ -55507,7 +55508,8 @@
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				]
 			},
 			"compat": {
