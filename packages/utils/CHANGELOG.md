@@ -11,6 +11,10 @@
 
 - Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
 - `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
+### Fixed
+
+- Child-shell environment filtering now tolerates a removed process working directory by retaining the resolved project directory ([#11828](https://github.com/can1357/oh-my-pi/issues/11828)).
+
 ## [18.1.16] - 2026-09-09
 
 ### Fixed
