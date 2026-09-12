@@ -3,6 +3,7 @@ import { getOAuthProviders } from "@oh-my-pi/pi-ai/registry/oauth";
 import { getProviderDefinition } from "@oh-my-pi/pi-ai/registry";
 import { getEnvApiKey, streamSimple } from "@oh-my-pi/pi-ai/stream";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { getBundledModels } from "@oh-my-pi/pi-catalog/models";
 import { DEFAULT_MODEL_PER_PROVIDER, PROVIDER_DESCRIPTORS } from "@oh-my-pi/pi-catalog/provider-models/descriptors";
 import { commandCodeModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
@@ -414,7 +415,7 @@ describe("Command Code provider support", () => {
 		for (const model of models) {
 			expect(model.thinking).toEqual({
 				mode: "effort",
-				efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
+				efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max],
 			});
 		}
 	});
