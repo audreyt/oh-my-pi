@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Command Code Muse Spark 1.3 crashing model load with `AmbiguousOverlapError` against the class `max` effort ladder; the host now opts into the effort dial and lets the class lineage carry `max`.
+
 ## [18.1.17] - 2026-09-10
 
 ### Added

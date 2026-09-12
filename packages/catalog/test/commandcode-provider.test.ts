@@ -392,6 +392,32 @@ describe("Command Code provider support", () => {
 			api: "anthropic-messages",
 		});
 	});
+	test("lets class lineage carry max on Command Code Muse Spark 1.3", async () => {
+		// Provider restating thinking-efforts ties classes/meta.kdl on the
+		// efforts axis. Keep only supports-reasoning-effort; class adds max.
+		const fetchMock: FetchImpl = vi.fn(async () =>
+			Response.json({
+				data: [
+					{ id: "meta/muse-spark-1.3", name: "Muse Spark 1.3", context_length: 1_048_576 },
+					{
+						id: "meta/muse-spark-1.3-contributor",
+						name: "Muse Spark 1.3 Contributor",
+						context_length: 1_048_576,
+					},
+				],
+			}),
+		);
+		const options = commandCodeModelManagerOptions({ apiKey: "user_test", fetch: fetchMock });
+		const specs = await options.fetchDynamicModels?.();
+		const models = (specs ?? []).map(spec => buildModel(spec));
+		expect(models).toHaveLength(2);
+		for (const model of models) {
+			expect(model.thinking).toEqual({
+				mode: "effort",
+				efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
+			});
+		}
+	});
 	test("keeps unknown context limits instead of copying another host", async () => {
 		// A catalog row that omits or misreports `context_length` retains a
 		// null window rather than inheriting another provider's deployment
