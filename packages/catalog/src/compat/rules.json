@@ -4656,7 +4656,21 @@
 				}
 			},
 			{
-				"source": "classes/deepseek.kdl:76",
+				"source": "classes/deepseek.kdl:84",
+				"class": "deepseek",
+				"models": [
+					{
+						"kind": "glob",
+						"value": "*v4.1-flash*"
+					}
+				],
+				"priority": 10,
+				"wire": {
+					"stripImageInput": false
+				}
+			},
+			{
+				"source": "classes/deepseek.kdl:87",
 				"class": "deepseek",
 				"providers": [
 					"ollama-cloud",
@@ -13945,22 +13959,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:5",
-				"providers": [
-					"openrouter"
-				],
-				"models": [
-					{
-						"kind": "exact",
-						"value": "deepseek/deepseek-v4.1-flash"
-					}
-				],
-				"wire": {
-					"stripImageInput": false
-				}
-			},
-			{
-				"source": "providers/openrouter.kdl:14",
+				"source": "providers/openrouter.kdl:10",
 				"class": "anthropic",
 				"providers": [
 					"openrouter"
@@ -13970,7 +13969,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:21",
+				"source": "providers/openrouter.kdl:17",
 				"class": "minimax",
 				"providers": [
 					"openrouter"
@@ -13986,7 +13985,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:26",
+				"source": "providers/openrouter.kdl:22",
 				"class": "openai",
 				"providers": [
 					"openrouter"
@@ -14002,7 +14001,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:31",
+				"source": "providers/openrouter.kdl:27",
 				"class": "stepfun",
 				"providers": [
 					"openrouter"
@@ -14018,7 +14017,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:35",
+				"source": "providers/openrouter.kdl:31",
 				"class": "unknown",
 				"providers": [
 					"openrouter"
@@ -14033,7 +14032,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:39",
+				"source": "providers/openrouter.kdl:35",
 				"providers": [
 					"openrouter"
 				],
@@ -14060,7 +14059,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:44",
+				"source": "providers/openrouter.kdl:40",
 				"providers": [
 					"openrouter"
 				],
@@ -14081,7 +14080,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:48",
+				"source": "providers/openrouter.kdl:44",
 				"providers": [
 					"openrouter"
 				],
@@ -14099,7 +14098,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:52",
+				"source": "providers/openrouter.kdl:48",
 				"providers": [
 					"openrouter"
 				],
@@ -14124,7 +14123,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:57",
+				"source": "providers/openrouter.kdl:53",
 				"providers": [
 					"openrouter"
 				],
@@ -14139,7 +14138,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:61",
+				"source": "providers/openrouter.kdl:57",
 				"providers": [
 					"openrouter"
 				],
@@ -14207,7 +14206,7 @@
 				}
 			},
 			{
-				"source": "providers/openrouter.kdl:67",
+				"source": "providers/openrouter.kdl:63",
 				"providers": [
 					"openrouter"
 				],
