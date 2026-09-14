@@ -7627,6 +7627,7 @@ export function doublewordModelManagerOptions(
 	const baseUrl = normalizeDoublewordBaseUrl(config?.baseUrl);
 	return {
 		providerId: "doubleword",
+		cacheProviderId: resolveModelCacheProviderId("doubleword", { baseUrl }),
 		dynamicModelsAuthoritative: true,
 		...(apiKey && {
 			fetchDynamicModels: () => {

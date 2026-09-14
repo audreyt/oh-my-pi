@@ -33,6 +33,7 @@ export function getDefaultModelDiscoveryBaseUrl(providerId: string): string | un
 		case "doubleword":
 			return DOUBLEWORD_API_BASE_URL;
 		case "opencode-go":
+			return "https://opencode.ai/zen/go/v1";
 		case "opencode-zen":
 			return "https://opencode.ai/zen/v1";
 		case "vllm":
