@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { resolveModelServiceTier, serviceTierFamily, shouldSendServiceTier } from "@oh-my-pi/pi-ai/types";
+import { streamSimple } from "@oh-my-pi/pi-ai/stream";
+import {
+	resolveModelServiceTier,
+	serviceTierFamily,
+	shouldSendServiceTier,
+	type Context,
+	type ServiceTier,
+} from "@oh-my-pi/pi-ai/types";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
 import { resolveModelPolicy } from "@oh-my-pi/pi-catalog/compat/resolve";
 import { getBundledModelReferenceIndex } from "@oh-my-pi/pi-catalog/identity/bundled";
@@ -39,8 +46,28 @@ describe("Doubleword provider", () => {
 		expect(serviceTierFamily(model)).toBe("openai");
 		expect(resolveModelServiceTier(undefined, model)).toBe("flex");
 		expect(resolveModelServiceTier({ openai: "priority" }, model)).toBe("priority");
+		expect(resolveModelServiceTier({ openai: "none" }, model)).toBe("none");
 		expect(shouldSendServiceTier("flex", model)).toBe(true);
 		expect(shouldSendServiceTier("priority", model)).toBe(true);
+		expect(shouldSendServiceTier("none", model)).toBe(false);
+	});
+
+	test("emits the resolved service_tier on the Responses wire, and none omits it", async () => {
+		const model = buildModel(doublewordSpec());
+		const context: Context = { messages: [{ role: "user", content: "hi", timestamp: 0 }] };
+		const capture = (serviceTier?: ServiceTier | "none") => {
+			const { promise, resolve } = Promise.withResolvers<Record<string, unknown>>();
+			void streamSimple(model, context, {
+				apiKey: "sk-dw-test",
+				signal: AbortSignal.abort(),
+				serviceTier,
+				onPayload: payload => resolve(payload as Record<string, unknown>),
+			});
+			return promise;
+		};
+		expect((await capture()).service_tier).toBe("flex");
+		expect((await capture("priority")).service_tier).toBe("priority");
+		expect("service_tier" in (await capture("none"))).toBe(false);
 	});
 
 	test("does not send service_tier for the same weights on an un-opted-in host", () => {
