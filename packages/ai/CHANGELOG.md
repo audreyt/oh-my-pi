@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 ## [18.1.20] - 2026-09-13
 
 ### Fixed
