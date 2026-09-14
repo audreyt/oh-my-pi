@@ -3053,6 +3053,156 @@ export async function processResponsesStream<TApi extends Api>(
 	// output item. A provider-hosted search that finishes without yield is
 	// progress evidence: the turn should pause for continuation rather than end.
 	let sawCompletedWebSearchCall = false;
+	// Items already finalized by a streamed `output_item.done`. Async/batch
+	// Responses hosts (Doubleword `flex`) deliver the whole turn inside the
+	// terminal event's `response.output[]` instead of per-item events, and
+	// spec-compliant hosts repeat finalized items there — dedupe on a stable
+	// identifier so terminal materialization never re-appends them.
+	const finalizedOutputItemKeys = new Set<string>();
+	const handleOutputItemDone = (rawItem: ResponseOutputItem, outputIndex: number | undefined): void => {
+		const item = structuredCloneJSON(rawItem);
+		const itemKey =
+			("id" in item ? item.id : undefined) ??
+			("call_id" in item ? item.call_id : undefined) ??
+			(typeof outputIndex === "number" ? `#${outputIndex}` : undefined);
+		if (itemKey !== undefined) {
+			if (finalizedOutputItemKeys.has(itemKey)) return;
+			finalizedOutputItemKeys.add(itemKey);
+		}
+		options?.onOutputItemDone?.(item);
+		const entry =
+			item.type === "function_call" || item.type === "custom_tool_call"
+				? lookupOpenItem({ output_index: outputIndex, item_id: item.id ?? item.call_id })
+				: lookupOpenItem({ output_index: outputIndex, item_id: item.id });
+		if (item.type === "reasoning") {
+			// Prefer the routed entry; the bare itemId find misroutes when ids are
+			// absent (`undefined === undefined` matches the FIRST thinking block) and
+			// misses entirely when the done-event id drifts from the added-event id.
+			let reasoningBlock =
+				entry?.block.type === "thinking"
+					? entry.block
+					: (output.content.find(b => b.type === "thinking" && (b as ThinkingContent).itemId === item.id) as
+							| ThinkingContent
+							| undefined);
+			if (!reasoningBlock) {
+				// `output_item.added` never arrived (async/batch hosts deliver the
+				// whole turn in the terminal event) — synthesize the block so the
+				// reasoning text and its replay signature survive.
+				reasoningBlock = { type: "thinking", thinking: "", itemId: item.id };
+				output.content.push(reasoningBlock);
+			}
+			reasoningBlock.thinking = finalizeReasoningThinking(item, reasoningBlock.thinking);
+			reasoningBlock.thinkingSignature = JSON.stringify(item);
+			stream.push({
+				type: "thinking_end",
+				contentIndex: contentIndexOf(reasoningBlock),
+				content: reasoningBlock.thinking,
+				partial: output,
+			});
+			closeOpenItem(outputIndex, item.id, entry);
+		} else if (item.type === "message") {
+			const block = entry?.block.type === "text" ? entry.block : undefined;
+			const text = finalizeMessageText(item, block?.text ?? "");
+			const textSignature = encodeTextSignatureV1(item.id, item.phase ?? undefined);
+			let contentIndex: number;
+			if (block) {
+				block.text = text;
+				block.textSignature = textSignature;
+				contentIndex = contentIndexOf(block);
+			} else {
+				// `output_item.added` never arrived (lossy proxy) — synthesize the
+				// block so the final message still carries the authoritative text.
+				const synthesized: TextContent = { type: "text", text, textSignature };
+				output.content.push(synthesized);
+				contentIndex = output.content.length - 1;
+			}
+			stream.push({ type: "text_end", contentIndex, content: text, partial: output });
+			closeOpenItem(outputIndex, item.id, entry);
+		} else if (item.type === "function_call") {
+			const block = entry?.block.type === "toolCall" ? entry.block : undefined;
+			const args = block?.[kStreamingArgumentsDone]
+				? block.arguments
+				: item.arguments
+					? parseStreamingJson(item.arguments)
+					: block?.[kStreamingPartialJson]
+						? parseStreamingJson(block[kStreamingPartialJson])
+						: parseStreamingJson("{}");
+			const toolCall: ToolCall = {
+				type: "toolCall",
+				id: encodeResponsesToolCallId(item.call_id, item.id),
+				name: item.name,
+				arguments: args,
+			};
+			let contentIndex: number;
+			if (block) {
+				// Persist the authoritative final args on the stored block. The
+				// throttled delta parser may have skipped the last partial parse,
+				// leaving block.arguments stale (often `{}`); the emitted toolCall
+				// and the persisted block must agree.
+				block.arguments = args;
+				clearStreamingPartialJson(block);
+				contentIndex = contentIndexOf(block);
+			} else {
+				// `output_item.added` never arrived (lossy proxy) — synthesize the
+				// block so the final message carries the call the consumer was told
+				// completed (the agent loop executes tools from message.content).
+				output.content.push(toolCall);
+				contentIndex = output.content.length - 1;
+			}
+			closeOpenItem(outputIndex, item.id, entry, item.call_id, prefixedFunctionCallItemKey(item.call_id));
+			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
+		} else if (item.type === "computer_call") {
+			const block = entry?.block.type === "toolCall" ? entry.block : undefined;
+			const toolCall: ToolCall = {
+				type: "toolCall",
+				id: encodeResponsesToolCallId(item.call_id, item.id),
+				name: "computer",
+				arguments: {},
+				providerMetadata: computerCallMetadata(item),
+			};
+			let contentIndex: number;
+			if (block) {
+				block.id = toolCall.id;
+				block.providerMetadata = toolCall.providerMetadata;
+				clearStreamingPartialJson(block);
+				contentIndex = contentIndexOf(block);
+			} else {
+				output.content.push(toolCall);
+				contentIndex = output.content.length - 1;
+			}
+			closeOpenItem(outputIndex, item.id, entry, item.call_id);
+			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
+		} else if (item.type === "custom_tool_call") {
+			const block = entry?.block.type === "toolCall" ? entry.block : undefined;
+			const rawInput = block?.[kStreamingPartialJson] ? block[kStreamingPartialJson] : (item.input ?? "");
+			const toolCall: ToolCall = {
+				type: "toolCall",
+				id: encodeResponsesToolCallId(item.call_id, item.id),
+				name: item.name,
+				arguments: { input: rawInput },
+				customWireName: item.name,
+			};
+			let contentIndex: number;
+			if (block) {
+				// Persist the final input on the stored block and drop the transient
+				// accumulation buffer, mirroring the function_call branch above.
+				block.arguments = { input: rawInput };
+				clearStreamingPartialJson(block);
+				contentIndex = contentIndexOf(block);
+			} else {
+				output.content.push(toolCall);
+				contentIndex = output.content.length - 1;
+			}
+			closeOpenItem(outputIndex, item.id, entry, item.call_id, prefixedFunctionCallItemKey(item.call_id));
+			stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
+		} else if (item.type === "web_search_call" && (item.status === undefined || item.status === "completed")) {
+			// A completed provider-hosted web search is progress evidence even when
+			// the model never surfaced an answer; the agent loop continues from it.
+			sawCompletedWebSearchCall = true;
+		} else if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
+			appendResponsesImageResult(output, stream, item.result);
+		}
+	};
 
 	for await (const event of openaiStream) {
 		const terminalEvent = getOpenAIResponsesTerminalEvent(event);
@@ -3231,137 +3381,25 @@ export async function processResponsesStream<TApi extends Api>(
 				entry.block[kStreamingArgumentsDone] = true;
 			}
 		} else if (event.type === "response.output_item.done") {
-			const item = structuredCloneJSON(event.item);
-			options?.onOutputItemDone?.(item);
-			const entry =
-				item.type === "function_call" || item.type === "custom_tool_call"
-					? lookupOpenItem({ output_index: event.output_index, item_id: item.id ?? item.call_id })
-					: lookupOpenItem({ output_index: event.output_index, item_id: item.id });
-			if (item.type === "reasoning") {
-				// Prefer the routed entry; the bare itemId find misroutes when ids are
-				// absent (`undefined === undefined` matches the FIRST thinking block) and
-				// misses entirely when the done-event id drifts from the added-event id.
-				const reasoningBlock =
-					entry?.block.type === "thinking"
-						? entry.block
-						: (output.content.find(b => b.type === "thinking" && (b as ThinkingContent).itemId === item.id) as
-								| ThinkingContent
-								| undefined);
-				if (reasoningBlock) {
-					reasoningBlock.thinking = finalizeReasoningThinking(item, reasoningBlock.thinking);
-					reasoningBlock.thinkingSignature = JSON.stringify(item);
-					stream.push({
-						type: "thinking_end",
-						contentIndex: contentIndexOf(reasoningBlock),
-						content: reasoningBlock.thinking,
-						partial: output,
-					});
-				}
-				closeOpenItem(event.output_index, item.id, entry);
-			} else if (item.type === "message") {
-				const block = entry?.block.type === "text" ? entry.block : undefined;
-				const text = finalizeMessageText(item, block?.text ?? "");
-				const textSignature = encodeTextSignatureV1(item.id, item.phase ?? undefined);
-				let contentIndex: number;
-				if (block) {
-					block.text = text;
-					block.textSignature = textSignature;
-					contentIndex = contentIndexOf(block);
-				} else {
-					// `output_item.added` never arrived (lossy proxy) — synthesize the
-					// block so the final message still carries the authoritative text.
-					const synthesized: TextContent = { type: "text", text, textSignature };
-					output.content.push(synthesized);
-					contentIndex = output.content.length - 1;
-				}
-				stream.push({ type: "text_end", contentIndex, content: text, partial: output });
-				closeOpenItem(event.output_index, item.id, entry);
-			} else if (item.type === "function_call") {
-				const block = entry?.block.type === "toolCall" ? entry.block : undefined;
-				const args = block?.[kStreamingArgumentsDone]
-					? block.arguments
-					: item.arguments
-						? parseStreamingJson(item.arguments)
-						: block?.[kStreamingPartialJson]
-							? parseStreamingJson(block[kStreamingPartialJson])
-							: parseStreamingJson("{}");
-				const toolCall: ToolCall = {
-					type: "toolCall",
-					id: encodeResponsesToolCallId(item.call_id, item.id),
-					name: item.name,
-					arguments: args,
-				};
-				let contentIndex: number;
-				if (block) {
-					// Persist the authoritative final args on the stored block. The
-					// throttled delta parser may have skipped the last partial parse,
-					// leaving block.arguments stale (often `{}`); the emitted toolCall
-					// and the persisted block must agree.
-					block.arguments = args;
-					clearStreamingPartialJson(block);
-					contentIndex = contentIndexOf(block);
-				} else {
-					// `output_item.added` never arrived (lossy proxy) — synthesize the
-					// block so the final message carries the call the consumer was told
-					// completed (the agent loop executes tools from message.content).
-					output.content.push(toolCall);
-					contentIndex = output.content.length - 1;
-				}
-				closeOpenItem(event.output_index, item.id, entry, item.call_id, prefixedFunctionCallItemKey(item.call_id));
-				stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
-			} else if (item.type === "computer_call") {
-				const block = entry?.block.type === "toolCall" ? entry.block : undefined;
-				const toolCall: ToolCall = {
-					type: "toolCall",
-					id: encodeResponsesToolCallId(item.call_id, item.id),
-					name: "computer",
-					arguments: {},
-					providerMetadata: computerCallMetadata(item),
-				};
-				let contentIndex: number;
-				if (block) {
-					block.id = toolCall.id;
-					block.providerMetadata = toolCall.providerMetadata;
-					clearStreamingPartialJson(block);
-					contentIndex = contentIndexOf(block);
-				} else {
-					output.content.push(toolCall);
-					contentIndex = output.content.length - 1;
-				}
-				closeOpenItem(event.output_index, item.id, entry, item.call_id);
-				stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
-			} else if (item.type === "custom_tool_call") {
-				const block = entry?.block.type === "toolCall" ? entry.block : undefined;
-				const rawInput = block?.[kStreamingPartialJson] ? block[kStreamingPartialJson] : (item.input ?? "");
-				const toolCall: ToolCall = {
-					type: "toolCall",
-					id: encodeResponsesToolCallId(item.call_id, item.id),
-					name: item.name,
-					arguments: { input: rawInput },
-					customWireName: item.name,
-				};
-				let contentIndex: number;
-				if (block) {
-					// Persist the final input on the stored block and drop the transient
-					// accumulation buffer, mirroring the function_call branch above.
-					block.arguments = { input: rawInput };
-					clearStreamingPartialJson(block);
-					contentIndex = contentIndexOf(block);
-				} else {
-					output.content.push(toolCall);
-					contentIndex = output.content.length - 1;
-				}
-				closeOpenItem(event.output_index, item.id, entry, item.call_id, prefixedFunctionCallItemKey(item.call_id));
-				stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
-			} else if (item.type === "web_search_call" && (item.status === undefined || item.status === "completed")) {
-				// A completed provider-hosted web search is progress evidence even when
-				// the model never surfaced an answer; the agent loop continues from it.
-				sawCompletedWebSearchCall = true;
-			} else if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
-				appendResponsesImageResult(output, stream, item.result);
-			}
+			handleOutputItemDone(event.item, event.output_index);
 		} else if (terminalEvent) {
 			const response = terminalEvent.response;
+			// Async/batch Responses hosts (Doubleword `flex`) deliver the whole turn
+			// inside the terminal event's `response.output[]` — no per-item
+			// `added`/`delta`/`done` events ever stream. Materialize every item the
+			// stream never finalized, or the turn surfaces as a billed, contentless
+			// "empty stop" despite the provider having generated output.
+			const terminalOutput = response?.output;
+			if (Array.isArray(terminalOutput) && terminalOutput.length > 0) {
+				if (!sawFirstToken) {
+					sawFirstToken = true;
+					options?.onFirstToken?.();
+				}
+				for (let index = 0; index < terminalOutput.length; index++) {
+					const outputItem = terminalOutput[index];
+					if (outputItem) handleOutputItemDone(outputItem, index);
+				}
+			}
 			const shouldPromoteIncompleteToolUse =
 				response?.status === "incomplete" &&
 				response.incomplete_details?.reason === "max_output_tokens" &&
@@ -3373,6 +3411,17 @@ export async function processResponsesStream<TApi extends Api>(
 			populateResponsesUsageFromResponse(output, response?.usage);
 			calculateCost(model, output.usage, output.timestamp);
 			applyProviderReportedCost(model, output.usage, response?.usage);
+			if (response?.status === "in_progress" || response?.status === "queued") {
+				// A terminal event carrying a non-terminal status is a mid-flight
+				// snapshot, not a completion: the stream ended before the response
+				// finished. Mapping it to "stop" would surface a billed,
+				// contentless turn and mask a truncated stream — fail it as an
+				// incomplete stream so transport retry/session recovery applies.
+				throw new AIError.ProviderResponseError(
+					`OpenAI responses stream ended with non-terminal status "${response.status}"`,
+					{ provider: model.provider, kind: "incomplete-stream" },
+				);
+			}
 			applyOpenAIResponsesServiceTierCost(
 				model,
 				output.usage,

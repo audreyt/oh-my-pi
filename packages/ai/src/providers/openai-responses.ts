@@ -518,13 +518,6 @@ const streamOpenAIResponsesOnce = (
 					? buildOpenAIResponsesChainedParams(params, trailingScaffoldingItems, chainState)
 					: { params };
 			sentPreviousResponseId = chained.previousResponseId;
-			const idleTimeoutMs =
-				options?.streamIdleTimeoutMs ?? getOpenAIStreamIdleTimeoutMs(model.compat.streamIdleTimeoutMs);
-			const firstEventTimeoutMs =
-				options?.streamFirstEventTimeoutMs ??
-				getOpenAIStreamFirstEventTimeoutMs(idleTimeoutMs, model.compat.streamFirstEventTimeoutMs);
-			const requestTimeoutMs =
-				firstEventTimeoutMs !== undefined && firstEventTimeoutMs > 0 ? firstEventTimeoutMs : undefined;
 			const requestUrl = `${resolvedBaseUrl}/responses`;
 			const applyPayloadReplacement = async (requestParams: OpenAIResponsesSamplingParams) => {
 				const replacementPayload = await options?.onPayload?.(requestParams, model);
@@ -534,6 +527,23 @@ const streamOpenAIResponsesOnce = (
 				return payload;
 			};
 			chained = { ...chained, params: await applyPayloadReplacement(chained.params) };
+			// `flex` is an explicitly asynchronous serving contract (Doubleword's
+			// default tier): the provider may hold the request queued for far
+			// longer than any realtime stream's first-event or inter-event budget,
+			// so the watchdogs stand down for it. Caller-supplied timeouts and env
+			// overrides still apply — the `0` fallback only disables the defaults.
+			const asyncServiceTier = chained.params.service_tier === "flex";
+			const idleTimeoutMs =
+				options?.streamIdleTimeoutMs ??
+				getOpenAIStreamIdleTimeoutMs(asyncServiceTier ? 0 : model.compat.streamIdleTimeoutMs);
+			const firstEventTimeoutMs =
+				options?.streamFirstEventTimeoutMs ??
+				getOpenAIStreamFirstEventTimeoutMs(
+					idleTimeoutMs,
+					asyncServiceTier ? 0 : model.compat.streamFirstEventTimeoutMs,
+				);
+			const requestTimeoutMs =
+				firstEventTimeoutMs !== undefined && firstEventTimeoutMs > 0 ? firstEventTimeoutMs : undefined;
 			const activeRawRequestDump: RawHttpRequestDump = {
 				provider: model.provider,
 				api: output.api,
