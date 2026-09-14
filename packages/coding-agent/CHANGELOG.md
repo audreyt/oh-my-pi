@@ -2,10 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
+### Changed
+
+- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 ## [18.1.21] - 2026-09-14
 
 ### Fixed
 
+- Native background security scans now accept provider-owned AWS authentication for Amazon Bedrock and Bedrock Mantle without requiring a stored OAuth account ([#12013](https://github.com/can1357/oh-my-pi/issues/12013)).
 - Fixed Flatpak Chromium launcher executables (including `com.google.Chrome`, `org.chromium.Chromium`, and `io.github.ungoogled_software.ungoogled_chromium`) so `app.path` is treated as a browser and gets managed Chromium profile handling
 - Fixed Chromium `--user-data-dir` handling by normalizing `--user-data-dir <dir>` and relative profile paths to absolute `--user-data-dir=...` values before launch
 - Browser automation now works alongside an already-running Chrome using an isolated profile, keeps requested profiles separate, and never kills reused browser processes.
