@@ -9,6 +9,7 @@
 ### Changed
 
 - `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+## [18.1.21] - 2026-09-14
 
 ### Fixed
 
