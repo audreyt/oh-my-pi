@@ -6,6 +6,10 @@
 
 - OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
+### Changed
+
+- `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 ## [18.1.20] - 2026-09-13
 
 ### Fixed

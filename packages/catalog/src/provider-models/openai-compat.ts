@@ -41,6 +41,7 @@ import {
 	mergeCopilotApiHeaders,
 	parseGitHubCopilotApiKey,
 } from "../wire/github-copilot";
+import { DOUBLEWORD_API_BASE_URL, normalizeDoublewordBaseUrl } from "../wire/doubleword";
 import { createBundledReferenceMap, createReferenceResolver, toModelSpec } from "./bundled-references";
 import { getDefaultModelDiscoveryBaseUrl, resolveModelCacheProviderId } from "./cache-provider-id";
 import { getClinePassModelMetadata } from "./cline-pass";
@@ -7594,11 +7595,14 @@ export function charmHyperModelManagerOptions(
 // Doubleword
 // ---------------------------------------------------------------------------
 
-export const DOUBLEWORD_BASE_URL = "https://api.doubleword.ai/v1";
+export const DOUBLEWORD_BASE_URL = DOUBLEWORD_API_BASE_URL;
 
 export interface DoublewordModelManagerConfig {
+	/** Doubleword API key (`sk-…`); discovery is omitted without one. */
 	apiKey?: string;
+	/** Endpoint override for a self-hosted proxy; normalized onto `/v1`. */
 	baseUrl?: string;
+	/** Fetch implementation for discovery (tests). */
 	fetch?: FetchImpl;
 }
 
@@ -7620,7 +7624,7 @@ export function doublewordModelManagerOptions(
 	config?: DoublewordModelManagerConfig,
 ): ModelManagerOptions<"openai-responses"> {
 	const apiKey = config?.apiKey;
-	const baseUrl = (config?.baseUrl ?? DOUBLEWORD_BASE_URL).replace(/\/$/, "");
+	const baseUrl = normalizeDoublewordBaseUrl(config?.baseUrl);
 	return {
 		providerId: "doubleword",
 		dynamicModelsAuthoritative: true,

@@ -141,8 +141,13 @@ export type ServiceTierFamily = "openai" | "anthropic" | "google";
  * family its model belongs to (see {@link resolveModelServiceTier}), so a user
  * can opt one family into priority without affecting the others when switching
  * models mid-session.
+ *
+ * `"none"` is the explicit omit sentinel: it suppresses the wire field AND the
+ * model's `defaultServiceTier` fallback, which is how a user opts a
+ * default-tiered host (Doubleword's `flex`) back onto standard processing. An
+ * absent entry means "no override" and falls through to that default.
  */
-export type ServiceTierByFamily = Partial<Record<ServiceTierFamily, ServiceTier>>;
+export type ServiceTierByFamily = Partial<Record<ServiceTierFamily, ServiceTier | "none">>;
 
 type ServiceTierModel = Pick<Model, "provider" | "api" | "identity"> & {
 	readonly compat?: Model["compat"];
@@ -153,7 +158,7 @@ type ServiceTierModel = Pick<Model, "provider" | "api" | "identity"> & {
  * that declares them (the OpenAI-family surfaces). Slim models rebuilt from
  * session JSONL carry no compat at all and read as `undefined`.
  */
-function serviceTierCompat(
+export function serviceTierCompat(
 	model: ServiceTierModel,
 ): { readonly supportsServiceTier?: boolean; readonly defaultServiceTier?: ServiceTier } | undefined {
 	const compat = model.compat;
@@ -221,12 +226,15 @@ export function serviceTierFamily(model: ServiceTierModel): ServiceTierFamily | 
  * A model whose rule declares `defaultServiceTier` falls back to it when the
  * session pins no tier for its family, so hosts whose reduced-rate path must be
  * requested explicitly (Doubleword's `flex`) still get it by default while
- * `/fast` keeps overriding it per turn.
+ * `/fast` keeps overriding it per turn. An explicit `"none"` entry is returned
+ * verbatim as the omit sentinel — it suppresses the wire field and the
+ * fallback, which is the only way to request standard processing on such a
+ * host.
  */
 export function resolveModelServiceTier(
 	tiers: ServiceTierByFamily | null | undefined,
 	model: ServiceTierModel,
-): ServiceTier | undefined {
+): ServiceTier | "none" | undefined {
 	const family = serviceTierFamily(model);
 	if (!family) return undefined;
 	return tiers?.[family] ?? serviceTierCompat(model)?.defaultServiceTier;
@@ -243,10 +251,10 @@ export function resolveModelServiceTier(
  * realizes `priority` via `speed: "fast"`.
  */
 export function shouldSendServiceTier(
-	serviceTier: ServiceTier | null | undefined,
+	serviceTier: ServiceTier | "none" | null | undefined,
 	target: Provider | ServiceTierModel | undefined,
 ): boolean {
-	if (!serviceTier || serviceTier === "auto") return false;
+	if (!serviceTier || serviceTier === "auto" || serviceTier === "none") return false;
 	const provider = typeof target === "string" ? target : target?.provider;
 	if (provider === "openai" || provider === "openai-codex") return true;
 	if (provider === "openrouter") {
@@ -271,7 +279,7 @@ export function shouldSendServiceTier(
  * models do not realize priority and return `false`.
  */
 export function realizesPriorityServiceTier(
-	serviceTier: ServiceTier | null | undefined,
+	serviceTier: ServiceTier | "none" | null | undefined,
 	model: ServiceTierModel,
 ): boolean {
 	if (serviceTier !== "priority") return false;
@@ -297,7 +305,7 @@ export function realizesPriorityServiceTier(
  * silently dropped.
  */
 export function getPriorityPremiumRequests(
-	serviceTier: ServiceTier | null | undefined,
+	serviceTier: ServiceTier | "none" | null | undefined,
 	model: ServiceTierModel,
 ): number {
 	if (!realizesPriorityServiceTier(serviceTier, model)) return 0;
@@ -324,7 +332,14 @@ export function coerceServiceTierByFamily(value: unknown): ServiceTierByFamily |
 		const out: ServiceTierByFamily = {};
 		for (const family of ["openai", "anthropic", "google"] as const) {
 			const tier = src[family];
-			if (tier === "auto" || tier === "default" || tier === "flex" || tier === "scale" || tier === "priority") {
+			if (
+				tier === "auto" ||
+				tier === "default" ||
+				tier === "flex" ||
+				tier === "scale" ||
+				tier === "priority" ||
+				tier === "none"
+			) {
 				out[family] = tier;
 			}
 		}
@@ -702,8 +717,8 @@ export interface SimpleStreamOptions extends Omit<StreamOptions, "apiKey"> {
 	requestMetadata?: Record<string, string>;
 	/** Optional tool choice override for compatible providers */
 	toolChoice?: ToolChoice;
-	/** OpenAI service tier for processing priority/cost control. Ignored by non-OpenAI providers. */
-	serviceTier?: ServiceTier;
+	/** OpenAI service tier for processing priority/cost control. `"none"` explicitly omits the field (and any model `defaultServiceTier`). Ignored by non-OpenAI providers. */
+	serviceTier?: ServiceTier | "none";
 	/** Explicit Kimi Code API format override; omitted uses live per-model protocol metadata. */
 	kimiApiFormat?: "openai" | "anthropic";
 	/** API format for Synthetic provider: "openai" or "anthropic" (default: "openai") */
