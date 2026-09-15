@@ -10,10 +10,8 @@ import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { readModelCache, writeModelCache } from "@oh-my-pi/pi-catalog/model-cache";
 import { resolveProviderModels } from "@oh-my-pi/pi-catalog/model-manager";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import {
-	META_MUSE_STATIC_MODELS,
-	openrouterModelManagerOptions,
-} from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
+import { seedModels } from "@oh-my-pi/pi-catalog/compat/providers";
+import { openrouterModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import type { Api, Model, ModelSpec } from "@oh-my-pi/pi-catalog/types";
 
 function completionsSpec(overrides: Partial<ModelSpec<"openai-completions">> = {}): ModelSpec<"openai-completions"> {
@@ -373,7 +371,7 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		expect(model.thinking?.efforts).not.toContain(Effort.Max);
 	});
 
-	it("exposes the max tier only on muse-spark-1.3 and its contributor variants", () => {
+	it("exposes the max tier on 1.3 standard rows while contributor rows stay capped at xhigh", () => {
 		const spark13 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.3",
@@ -402,7 +400,13 @@ describe("xAI Responses reasoning-effort suppression", () => {
 				input: ["text", "image"],
 			}),
 		);
-		expect(contributor.thinking?.efforts).toContain(Effort.Max);
+		expect(contributor.thinking?.efforts).toEqual([
+			Effort.Minimal,
+			Effort.Low,
+			Effort.Medium,
+			Effort.High,
+			Effort.XHigh,
+		]);
 		const freeAlias = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.3-contributor-free",
@@ -1176,7 +1180,7 @@ describe("model cache spec round trip", () => {
 			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh],
 		};
 		const staleFamily = museIds.map(id => {
-			const seed = META_MUSE_STATIC_MODELS.find(model => model.id === id);
+			const seed = seedModels<"openai-responses">("meta").find(model => model.id === id);
 			if (!seed) throw new Error(`Missing Meta Muse seed ${id}`);
 			return buildModel({ ...seed, thinking: staleXhigh });
 		});
@@ -1200,7 +1204,7 @@ describe("model cache spec round trip", () => {
 			const resolved = await resolveProviderModels<"openai-responses">(
 				{
 					providerId: "meta",
-					staticModels: META_MUSE_STATIC_MODELS,
+					staticModels: seedModels<"openai-responses">("meta"),
 					cacheDbPath: dbPath,
 				},
 				"offline",
@@ -1209,8 +1213,13 @@ describe("model cache spec round trip", () => {
 				const bundled = getBundledModel("meta", id);
 				const model = resolved.models.find(candidate => candidate.id === id);
 				expect(model?.thinking?.efforts).toEqual(bundled?.thinking?.efforts);
-				expect(model?.thinking?.efforts).toContain(Effort.Max);
 			}
+			expect(resolved.models.find(candidate => candidate.id === "muse-spark-1.3")?.thinking?.efforts).toContain(
+				Effort.Max,
+			);
+			expect(
+				resolved.models.find(candidate => candidate.id === "muse-spark-1.3-contributor")?.thinking?.efforts,
+			).not.toContain(Effort.Max);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
@@ -1221,7 +1230,7 @@ describe("model cache spec round trip", () => {
 		const dbPath = path.join(tempDir, "models.db");
 		const museIds = ["muse-spark-1.3", "muse-spark-1.3-contributor"] as const;
 		const currentFamily = museIds.map(id => {
-			const seed = META_MUSE_STATIC_MODELS.find(model => model.id === id);
+			const seed = seedModels<"openai-responses">("meta").find(model => model.id === id);
 			if (!seed) throw new Error(`Missing Meta Muse seed ${id}`);
 			return buildModel(seed);
 		});
@@ -1239,22 +1248,24 @@ describe("model cache spec round trip", () => {
 			writeModelCache("meta", Date.now(), [...currentFamily, authored], true, "merge-v3:current-muse", dbPath);
 			const cached = readModelCache<"openai-responses">("meta", Infinity, Date.now, dbPath);
 			expect(cached).not.toBeNull();
-			for (const id of museIds) {
-				expect(cached?.models.find(model => model.id === id)?.thinking?.efforts).toContain(Effort.Max);
-			}
+			expect(cached?.models.find(model => model.id === "muse-spark-1.3")?.thinking?.efforts).toContain(Effort.Max);
+			expect(
+				cached?.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts,
+			).not.toContain(Effort.Max);
 			expect(cached?.models.find(model => model.id === authored.id)?.thinking?.efforts).toEqual(authoredEfforts);
 
 			const offline = await resolveProviderModels<"openai-responses">(
 				{
 					providerId: "meta",
-					staticModels: META_MUSE_STATIC_MODELS,
+					staticModels: seedModels<"openai-responses">("meta"),
 					cacheDbPath: dbPath,
 				},
 				"offline",
 			);
-			for (const id of museIds) {
-				expect(offline.models.find(model => model.id === id)?.thinking?.efforts).toContain(Effort.Max);
-			}
+			expect(offline.models.find(model => model.id === "muse-spark-1.3")?.thinking?.efforts).toContain(Effort.Max);
+			expect(
+				offline.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts,
+			).not.toContain(Effort.Max);
 			expect(offline.models.find(model => model.id === authored.id)?.thinking?.efforts).toEqual(authoredEfforts);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });

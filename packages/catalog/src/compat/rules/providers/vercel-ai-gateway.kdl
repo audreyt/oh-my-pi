@@ -1,6 +1,12 @@
 // Provider-wire compat for "vercel-ai-gateway"; regenerated from the frozen census using deployment contract selectors.
 
 provider "vercel-ai-gateway" {
+	default-model "anthropic/claude-opus-4.8"
+	env "AI_GATEWAY_API_KEY"
+	discovery label="Vercel AI Gateway" allow-unauthenticated=#true {
+		env "VERCEL_AI_GATEWAY_API_KEY"
+	}
+
 	// This Anthropic-budget route maps xhigh and max to the same budget.
 	// Keep the existing ladder until the deployment exposes a distinct max.
 	models "meta/muse-spark-1.3" "meta/muse-spark-1.3-contributor" priority=1 {

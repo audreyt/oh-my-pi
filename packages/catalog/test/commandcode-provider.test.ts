@@ -412,12 +412,14 @@ describe("Command Code provider support", () => {
 		const specs = await options.fetchDynamicModels?.();
 		const models = (specs ?? []).map(spec => buildModel(spec));
 		expect(models).toHaveLength(2);
-		for (const model of models) {
-			expect(model.thinking).toEqual({
-				mode: "effort",
-				efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max],
-			});
-		}
+		expect(models.find(model => model.id === "meta/muse-spark-1.3")?.thinking).toEqual({
+			mode: "effort",
+			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max],
+		});
+		expect(models.find(model => model.id === "meta/muse-spark-1.3-contributor")?.thinking).toEqual({
+			mode: "effort",
+			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh],
+		});
 	});
 	test("keeps unknown context limits instead of copying another host", async () => {
 		// A catalog row that omits or misreports `context_length` retains a

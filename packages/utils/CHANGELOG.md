@@ -11,6 +11,28 @@
 
 - Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
 - `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
+### Added
+
+- Added `sleepLong()` and `MAX_TIMER_DELAY_MS`: an abortable sleep that chunks delays past the signed 32-bit timer ceiling so day-scale provider waits elapse instead of overflowing the timer.
+
+### Fixed
+
+- Fixed `extractRetryHint` dropping OpenCode Go's `Resets in …` quota window (`45min`, `2hr 15min`, `3 days`): the `reset in` pattern now accepts `Resets` phrasing, `hr`/`day` units, and compound `2hr 15min` remainders, so exhausted Go credentials block for the server-stated window instead of the 60s heuristic guess. ([#12091](https://github.com/can1357/oh-my-pi/pull/12091) by [@H4vC](https://github.com/H4vC))
+### Breaking Changes
+
+- Browser helpers now manage Chrome only: removed `Browser`, `BrowserTag`, `resolveBuildId()`, `getInstalledBrowsers()`, and `browser` options/metadata; `getDownloadUrl()` now takes `(platform, buildId, baseUrl?)`.
+
+### Fixed
+
+- Dotenv loading now handles multiline values and escapes consistently with Bun, preventing project values from leaking into child-shell environments.
+- SSE readers now support lone-CR line endings and CRLF split across chunks without merging or delaying events.
+
+## [18.1.22] - 2026-09-14
+
+### Fixed
+
+- Fixed `extractRetryHint` sleeping hours past the provider's stated wait when a timezone-naive `reset at` timestamp overshoots the relative retry hint: the skewed stamp is now ignored instead of winning longest-wins ([#12070](https://github.com/can1357/oh-my-pi/pull/12070) by [@H4vC](https://github.com/H4vC)).
+
 ## [18.1.21] - 2026-09-14
 
 ### Added
