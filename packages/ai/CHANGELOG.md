@@ -9,6 +9,12 @@
 ### Changed
 
 - `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+## [18.2.0] - 2026-09-15
+
+### Added
+
+- Assistant turns from Anthropic-compatible hosts (direct, or via OpenRouter's `reasoning_details`) carry `upstreamModel`, the serving model id recovered from the signed thinking block, so callers can detect a router substituting a different model than requested.
+
 ### Fixed
 
 - Fixed OpenCode Go window-limit 429s (`5-hour`/`Weekly`/`Monthly usage limit reached. Resets in …`) not pinning the exhausted credential to the server-stated reset; the window phrasing is now covered by a regression test over the rotation classifier. ([#12091](https://github.com/can1357/oh-my-pi/pull/12091) by [@H4vC](https://github.com/H4vC))
