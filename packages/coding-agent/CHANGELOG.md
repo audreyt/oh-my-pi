@@ -11,6 +11,7 @@
 - `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 ### Breaking Changes
 
+- `Settings.getGroup()` now returns shallow-frozen snapshots, reused until effective settings change.
 - Removed `parseSSE`, `MCPToolsResponse`, and `MCPCallResponse`; `callMCP()` now returns the shared `JsonRpcResponse` with an `unknown` result instead of an unchecked generic payload.
 
 ### Added
@@ -22,10 +23,19 @@
 
 ### Changed
 
+- Compiled binaries ship precompiled bytecode: `omp` boots in ~30 ms instead of ~250 ms and the interactive prompt accepts input ~300 ms sooner, at the cost of a larger binary.
+- Welcome recents refresh after first paint, and attachment bands reuse cached chip state until the draft changes.
+- Interactive startup paints its speculative frame before loading the session runtime; model/auth dialogs and browser/computer preludes load on first use.
+- Status-line redraws reuse unchanged segment output, settings groups, and tool token estimates while preserving live invalidation.
 - Skill invocations render as a normal user turn: a mid-prompt skill shows as an inline chip in the user bubble; a leading skill shows as a railed callout with the chip and prompt size, with the rest of your message rendered as full multi-line Markdown instead of a single collapsed header.
 
 ### Fixed
 
+- Isolated settings no longer share mutable array and record defaults.
+- Ask timeouts above 1,000 seconds now retain their configured duration.
+- Configured extension directories no longer load fallback index files when declared entries are missing.
+- Telemetry no longer sends OTLP when only a non-OTLP exporter is selected.
+- Browser response-body failures now preserve their original protocol errors.
 - Auto-retry waits past the signed 32-bit timer ceiling (e.g. a month-scale OpenCode Go reset with `retry.waitForUsageReset`) now elapse in full instead of overflowing the timer and retrying immediately.
 - JavaScript eval now reports startup failure if both isolated runtimes fail, instead of executing uncancellable code on the host thread.
 - CommonJS extensions now expose computed and non-enumerable named exports while preserving `require`/import identity and reloads.

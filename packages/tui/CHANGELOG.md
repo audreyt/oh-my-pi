@@ -4,7 +4,13 @@
 
 ### Added
 
+- Added `Editor.textRevision` for content-dependent render caches, including undo and draft restoration.
 - Added collapseToAtom method to compress text spans into UI-friendly atoms
+
+### Changed
+
+- Redrawing unchanged terminal rows now avoids rescanning ANSI, hyperlinks, and images.
+- Terminal UIs reach their first frame with a smaller startup module graph.
 
 ## [18.1.17] - 2026-09-10
 
