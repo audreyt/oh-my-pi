@@ -5,10 +5,12 @@
 ### Added
 
 - Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+- Added the `ask` tool to `/vibe` directors with an interactive UI so they can request user-owned decisions without leaving director mode.
 
 ### Changed
 
 - `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 - Added `tui.titleSpinner` (`braille` | `dots` | `line`, default `braille`) to pick the terminal-title working-state spinner glyphs alongside the existing `tui.titleState` on/off toggle.
 
 ## [18.2.1] - 2026-09-15
