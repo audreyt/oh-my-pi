@@ -8,6 +8,13 @@
 - Added the `ask` tool to `/vibe` directors with an interactive UI so they can request user-owned decisions without leaving director mode.
 - Added opt-in Apple Foundation Models (`afm-core`) session title generation for Darwin hosts ([#9683](https://github.com/can1357/oh-my-pi/pull/9683)).
 - Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+- Added `memory.backend: mnemon`, a native [Mnemon](https://github.com/mnemon-dev/mnemon) CLI backend against `~/.mnemon`. It occupies the same host slot as Mnemopi (`recall` / `retain`, `/memory stats`, first-turn silent recall, compaction context) without using the Mnemopi SQLite schema. Silent recall is high-score only. `/memory clear` is refused. `reflect` and `memory_edit` stay Mnemopi/Hindsight-only. Do not point `mnemopi.dbPath` at `~/.mnemon`.
+- Added host `link` for `memory.backend: mnemon` (`id1`/`id2`/`type`/`weight`, including `supersedes`). `retain` now returns the new insight id and link candidates so the graph loop can close without dropping to the CLI. `supersedes` falls back to `causal` on CLIs that reject the fifth edge type.
+- Added host `related` and `forget` for `memory.backend: mnemon`. `retain` now accepts `category`, `importance`, and `entities` instead of hardcoding `context`/`3`. `recall` accepts optional `limit`.
+- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
+- Added opt-in Apple SpeechAnalyzer speech-to-text on macOS 26+, with live partials and system-managed locale assets.
+- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
+- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
 
 ### Changed
 
@@ -23,6 +30,12 @@
 - Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
 - `afm-core` sidecars use build- and architecture-specific cache paths, preventing concurrent installs or interrupted upgrades from replacing a helper another process is about to launch.
 - Transient `afm-core` startup, process, and response errors no longer disable subsequent title requests.
+- Fixed `/memory stats` crashing on `memory.backend: mnemon` (`undefined is not an object (evaluating 'this.status')`) when the TUI extracted the unbound hook.
+- Fixed `memory.backend: mnemon` host tools so `link` / `related` / `forget` mount and unmount on backend switch, `link` is write-tier, secret scans cover every persisted save field, and abort/timeout waits for the CLI child to exit.
+- Fixed an issue where explicitly passing an importance of `1` to mnemon was incorrectly scaled to `5`
+- Fixed `mnemon` executable resolution to fail loudly if an explicitly configured path does not exist, instead of silently falling back to a binary found on `PATH`
+- Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
+- Keenable recency retries now share the original search timeout and retain rotated credentials instead of retrying a rejected key.
 
 ## [18.2.1] - 2026-09-15
 
@@ -66,21 +79,6 @@
 - Added V8 `.cpuprofile` support to the read tool (Node/Bun `--cpu-prof`, Chrome DevTools, CDP `Profiler.stop` output): reads now return a compact bottleneck summary — hot-path call tree with on-CPU milliseconds (`(idle)` time excluded), collapsed pass-through chains, flattened direct recursion, shortened file URLs, and a top-functions-by-self-time table. `:raw` still reads the original JSON, and files that merely carry the extension fall back to plain text.
 - Added separate Advisor cost visibility to the status line, rendering primary and Advisor spend as `$2.67 (sub) + $0.41 (adv)` while keeping already-incurred Advisor cost across runtime disablement and same-session history rewrites.
 - Added a configurable per-request timeout for the `inspect_image` tool (`inspect_image.timeoutMs`, default 5 minutes; set to 0 to disable) so a stalled vision-model provider fails fast with a clear error instead of blocking until manual abort ([#4165](https://github.com/can1357/oh-my-pi/issues/4165)).
-- Added an explicit append-only transcript declaration and width-independent stable-row API for components that can guarantee an immutable history prefix across later updates.
-- Added `afm-core` as an opt-in Darwin engine for session titles (`providers.tinyModel`) and unexpected-stop classification (`providers.unexpectedStopModel`). It uses the on-device Apple Foundation Model via a bundled Apple Silicon sidecar (Xcode/CLT only needed on other Darwin triples); `omp tiny-models download afm-core` probes readiness instead of fetching Hugging Face weights.
-- Added `:img` read selector to rasterize local SVG/SVGZ files for vision input.
-- Added side-by-side image and SVG previews to `omp git`, including local Git LFS object resolution and explicit placeholders for unavailable or unsupported binary content.
-- Added the `omp if-bench` command: a zero-tool instruction-following and working-memory benchmark that drives one cached conversation per model, adding one more glyph array action every turn while a `nya{1,N}` directive moves through the prompt, with a live turn-ladder board and a ranked scoreboard
-- Added `q` shortcut to exit the git TUI
-- Added a third state to the git TUI whitespace toggle (`b`): beyond ignoring whitespace-only line changes, it hides formatting-only changes (indentation, line splits/joins, blank lines) and import-only changes in TypeScript/JavaScript, Rust, and Go
-- Compressed single-child directory chains in the sidebar tree view
-- Split pure additions (new/untracked files) into their own list below tracked changes in each git TUI file section, separated by a rule; addition rows drop the redundant status letter and deleted files render struck through
-- Added opt-in Apple SpeechAnalyzer speech-to-text on macOS 26+, with live partials and system-managed locale assets.
-- Git and Jujutsu operations now run in-process (gitoxide/jj-lib) instead of spawning `git`/`jj` subprocesses — faster status lines, diffs, staging, and worktree operations. The git binary is only used for credential-bound network transfers (push/fetch/clone) and reftable repositories.
-- Status lines, footers, reviews, project identity, cleanse, and autoresearch reads now work in pure Jujutsu workspaces as well as Git checkouts.
-- Include token usage statistics in inspect_image tool output
-- Pressing the session model shortcut (alt+p) again inside the picker toggles a red Task mode that switches the Task subagent's model for this session instead.
-- Git TUI: an AI staging wand next to "Stage All" asks "What should we stage?" and stages only the matching changes — the tiny/smol model picks the matching files from the whole change list, then filters their hunks in parallel; file-scoped requests ("git stuff") stage the picked files whole, content-scoped ones ("all comment changes") stage only the matching hunks.
 
 ### Changed
 
@@ -116,15 +114,6 @@
 - Reduced default startup resident memory by constructing the default-off ComputerTool ArkType schema only on first parameter access, then reusing it across tool instances without changing validation or tool behavior ([#6742](https://github.com/can1357/oh-my-pi/pull/6742) by [@usr-bin-roygbiv](https://github.com/usr-bin-roygbiv)).
 - Reduced startup CPU and memory by loading the bundled changelog only when needed, while preserving source, npm bundle, standalone binary, and native absolute-path fallback resolution.
 - Moved PTY log replay into the shared project launch broker, so normal CLI and Hub startup no longer load the xterm runtime while launch logs return validated rendered terminal rows.
-- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939)).
-- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
-- `/usage` now shows prepaid credit balances (e.g. Charm Hyper's `100 credits left`) on the provider cards and account summaries instead of `no data` ([#11656](https://github.com/can1357/oh-my-pi/pull/11656) by [@oldschoola](https://github.com/oldschoola)).
-- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
-- Retry fallback chains now support per-model reasoning efforts: a fallback entry may carry an explicit thinking suffix (`"default": ["openai/gpt-5-mini:low"]`), and pressing `t` on a fallback row in `/models` sets or clears it. Bare entries keep inheriting the failing turn's effort. ([#11842](https://github.com/can1357/oh-my-pi/pull/11842) by [@H4vC](https://github.com/H4vC)).
-- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
-- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
-- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
-- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
 
 ### Fixed
 
@@ -483,11 +472,6 @@
 - Native background security scans now accept provider-owned AWS authentication for Amazon Bedrock and Bedrock Mantle without requiring a stored OAuth account ([#12013](https://github.com/can1357/oh-my-pi/issues/12013)).
 
 ## [18.1.21] - 2026-09-14
-- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
-
-### Changed
-
-- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ### Fixed
 
@@ -721,7 +705,6 @@
 
 ### Added
 
-- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
 - Added `/prewalk restart` to return an active session to its `@default` model and re-arm the one-shot handoff to `@smol`.
 
 ### Changed
@@ -736,7 +719,6 @@
 - Keyless image proxies no longer receive a synthetic bearer token; explicitly configured authorization headers are preserved.
 ### Added
 
-- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939)).
 
 ### Fixed
 
@@ -768,16 +750,11 @@
 - Fixed frame skips while streaming long markdown Write previews ([#10955](https://github.com/can1357/oh-my-pi/issues/10955)).
 - LiteLLM discovery no longer caches an empty catalog after a timed-out run: a rich-metadata timeout now falls back to `/v1/models`, and a discovery failure with no prior catalog leaves the cache untouched so the next launch retries immediately instead of hiding discovery-only models ([#10964](https://github.com/can1357/oh-my-pi/issues/10964)).
 - Searching `free` in the model picker now finds every zero-cost model, not just the ones with `free` in their id.
-### Fixed
-
-- Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
-- Keenable recency retries now share the original search timeout and retain rotated credentials instead of retrying a rejected key.
 
 ## [18.1.11] - 2026-09-05
 
 ### Added
 
-- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
 - Added the `ask` tool to Vibe mode directors when it is built in and enabled in the parent session ([#8237](https://github.com/can1357/oh-my-pi/pull/8237)).
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 - Added opt-in `bash.allowCompoundCommands` approval for conservative literal `&&` chains, with ordered per-segment rules and normal bash policy fallback for unmatched segments. The opt-in requires a positively classified POSIX-quoting shell; incompatible and unknown shells retain legacy approval. Whole-chain denies take precedence over earlier prompts.
@@ -844,10 +821,7 @@
 - Removed the librarian agent.
 
 ### Added
-- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API).
-- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API)
 
-- Added opt-in Apple SpeechAnalyzer speech-to-text on macOS 26+, with live partials and system-managed locale assets.
 
 - Video files can be attached or read through system ffmpeg as preview grids with metadata; use `:412` or `:1h5m42s` to inspect individual frames.
 - The model picker now shows a brain-icon intelligence column and uses catalog TPS as an estimate until local performance data exists.
@@ -1241,7 +1215,6 @@
 - Fixed the git TUI sidebar jumping back to the top of the file list after staging or unstaging a file; selection now stays on the nearest remaining row
 - Fixed the `aarch64-linux` `nix build` output segfaulting in the dynamic loader before startup by repointing the stale `DT_VERDEF` that `patchelf` leaves behind when it grows `.dynamic`, and surfaced smoke-test signal deaths in the build log instead of masking them ([#9881](https://github.com/can1357/oh-my-pi/issues/9881)).
 - Added custom RPC launcher builders so embedded clients can transport omp RPC through SSH and remote process managers.
-- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API).
 
 ## [18.0.7] - 2026-08-26
 
