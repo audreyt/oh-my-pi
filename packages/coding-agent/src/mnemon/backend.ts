@@ -252,9 +252,16 @@ export const mnemonBackend: MemoryBackend = {
 			if (config.autoRetain) {
 				state.unsubscribe = session.subscribe((event: AgentSessionEvent) => {
 					if (event.type === "agent_end") {
-						state.retainInFlight = retainTranscriptTail(state, session).catch(error => {
-							logger.warn("Mnemon: agent_end retention failed", { error: String(error) });
-						});
+						// Serialize: a turn that ends while the previous retention
+						// is still running must observe its updated
+						// lastRetainedTurn. Overlapping tails would compute the
+						// same slice twice and write duplicate insights.
+						const previous = state.retainInFlight ?? Promise.resolve();
+						state.retainInFlight = previous
+							.then(() => retainTranscriptTail(state, session))
+							.catch(error => {
+								logger.warn("Mnemon: agent_end retention failed", { error: String(error) });
+							});
 					}
 				});
 			}
