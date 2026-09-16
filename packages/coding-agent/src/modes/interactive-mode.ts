@@ -4709,7 +4709,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const previousTools = options?.previousTools ?? this.session.getEnabledToolNames();
 		const vibeBaseTools = ["read"];
 		if (this.session.hasBuiltInTool("todo")) vibeBaseTools.push("todo");
-		if (this.session.hasBuiltInTool("ask")) vibeBaseTools.push("ask");
+		if (this.session.hasBuiltInTool("ask") && previousTools.includes("ask")) vibeBaseTools.push("ask");
 		// The entry runs as a stored promise so a concurrent /vibe joins it
 		// above instead of dispatching on the stale toolset. The first caller
 		// awaits it below, so a failure is always observed (no unhandled
