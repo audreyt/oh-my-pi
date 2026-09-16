@@ -6,6 +6,7 @@
 
 - Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Requests use the Responses API and default to async `flex`; `/fast` switches a turn to realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 - Added the `max` thinking-effort tier to Muse Spark 1.3 and its contributor variant on reseller hosts and Command Code, with the ladder owned by the class lineage.
+- Added the Meta/Muse Image hosted image operation to the compat policy: a `meta-image` default of `muse-image-1.0` for the model-less `generate_image` tool.
 
 ### Fixed
 
@@ -163,9 +164,6 @@
 	- Fixed GPT-6 Astra requests through GitHub Copilot failing with an unsupported endpoint error ([#10874](https://github.com/can1357/oh-my-pi/pull/10874) by [@xpcmdshell](https://github.com/xpcmdshell)).
 	- Fixed GPT-6 Astra showing as free with a 272K-token window in the OpenAI Codex catalog by applying its documented pricing; `/extended-context` enables the wire-advertised 872K-token maximum ([#10980](https://github.com/can1357/oh-my-pi/pull/10980) by [@H4vC](https://github.com/H4vC)).
 	- Made extended-context catalog rebuilds faster by resolving each model's maximum window once per process ([#11039](https://github.com/can1357/oh-my-pi/pull/11039) by [@H4vC](https://github.com/H4vC)).
-### Added
-
-- Added the Meta/Muse Image hosted image operation to the compat policy: a `meta-image` default of `muse-image-1.0` for the model-less `generate_image` tool.
 
 ## [18.1.9] - 2026-09-04
 
