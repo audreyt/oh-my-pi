@@ -208,9 +208,9 @@ describe("InteractiveMode vibe mode toggle", () => {
 	});
 
 	it("preserves the parent Ask and Todo tools and restores the exact pre-vibe toolset on exit", async () => {
+		await session.setActiveToolsByName(["ask", "read", "todo"]);
 		expect(session.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
-		expect(session.getActiveToolNames()).toEqual([]);
-
+		expect(session.getActiveToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(true);
 		const inMode = session.getActiveToolNames();
@@ -235,8 +235,36 @@ describe("InteractiveMode vibe mode toggle", () => {
 		// ephemeral vibe tools must leave the registry.
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(false);
-		expect(session.getActiveToolNames()).toEqual([]);
+		expect(session.getActiveToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
 		expect(session.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
+	});
+
+	it("does not activate Ask in Vibe mode when ask is disabled in previousTools", async () => {
+		await session.setActiveToolsByName(["read", "todo"]);
+		expect(session.getActiveToolNames().toSorted()).toEqual(["read", "todo"]);
+
+		await mode.handleVibeModeCommand();
+		expect(mode.vibeModeEnabled).toBe(true);
+		const inMode = session.getActiveToolNames();
+		expect(inMode).toContain("read");
+		expect(inMode).toContain("todo");
+		expect(inMode).not.toContain("ask");
+		for (const name of VIBE_TOOL_NAMES) {
+			expect(inMode).toContain(name);
+		}
+		expect(inMode.toSorted()).toEqual(["read", "todo", ...VIBE_TOOL_NAMES].toSorted());
+
+		const sendCustomMessage = vi.spyOn(session, "sendCustomMessage");
+		await session.sendVibeModeContext({ deliverAs: "steer" });
+		const message = normalizeCustomMessagePayload(sendCustomMessage.mock.calls[0]?.[0]);
+		const content = typeof message.content === "string" ? message.content : "";
+		expect(message.customType).toBe("vibe-mode-context");
+		expect(content).toContain("`todo`");
+		expect(content).not.toContain("`ask`");
+
+		await mode.handleVibeModeCommand();
+		expect(mode.vibeModeEnabled).toBe(false);
+		expect(session.getActiveToolNames().toSorted()).toEqual(["read", "todo"]);
 	});
 
 	it("removes the Vibe directive from provider context on exit", async () => {
@@ -493,7 +521,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 			const content = typeof message.content === "string" ? message.content : "";
 			expect(content).not.toContain("`todo`");
 			expect(content).not.toContain("`ask`");
-			expect(content).not.toContain("parent session list");
+
 			await foreignTodoMode.handleVibeModeCommand();
 			expect(foreignTodoSession.getActiveToolNames()).toEqual([]);
 			expect(foreignTodoSession.getAllToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
@@ -505,6 +533,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 
 	it("preserves workers, Ask/Todo access, and mode metadata on a same-session reload", async () => {
 		await mode.init({ suppressWelcomeIntro: true });
+		await session.setActiveToolsByName(["read", "ask", "todo"]);
 		await mode.handleVibeModeCommand();
 		await session.sessionManager.ensureOnDisk();
 		const sessionFile = session.sessionFile;
@@ -529,7 +558,6 @@ describe("InteractiveMode vibe mode toggle", () => {
 		const content = typeof message.content === "string" ? message.content : "";
 		expect(content).toContain("`todo`");
 		expect(content).toContain("`ask`");
-		expect(content).toContain("parent session list");
 		expect(suspend).toHaveBeenCalledTimes(1);
 		expect(terminate).not.toHaveBeenCalled();
 		expect(vibeModeEntryCount(session.sessionManager)).toBe(1);
@@ -731,7 +759,7 @@ describe("InteractiveMode vibe mode toggle", () => {
 	it("does not clobber the target's active tools with the source snapshot when switching out of vibe", async () => {
 		await mode.init({ suppressWelcomeIntro: true });
 		// Pre-vibe snapshot on the source session is empty; entering vibe activates
-		// read, UI-only ask, parent-owned todo, and the vibe tools.
+		// read, parent-owned todo, and the vibe tools.
 		await mode.handleVibeModeCommand();
 		expect(mode.vibeModeEnabled).toBe(true);
 		expect(session.getActiveToolNames()).toContain("read");
@@ -747,10 +775,10 @@ describe("InteractiveMode vibe mode toggle", () => {
 		expect(await session.switchSession(targetFile)).toBe(true);
 
 		expect(mode.vibeModeEnabled).toBe(false);
-		// The transient vibe tools are gone, but the genuinely-active `read`,
-		// UI-only `ask`, and parent-owned `todo` tools must survive — the source's
-		// empty pre-vibe snapshot must not wipe them.
-		expect(session.getActiveToolNames()).toEqual(["read", "todo", "ask"]);
+		// The transient vibe tools are gone, but the genuinely-active `read` and
+		// parent-owned `todo` tools must survive — the source's empty pre-vibe
+		// snapshot must not wipe them.
+		expect(session.getActiveToolNames()).toEqual(["read", "todo"]);
 		for (const name of VIBE_TOOL_NAMES) {
 			expect(session.getActiveToolNames()).not.toContain(name);
 		}
