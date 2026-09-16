@@ -88,10 +88,10 @@
 		"build:native": "bun --cwd=packages/natives run build",
 		"test": "bun scripts/ci-test-ts.ts local",
 		"test:ts": "bun scripts/ci-test-ts.ts local-ts",
-		"test:scripts": "bun test scripts/ci-test-ts.test.ts scripts/ci-release-build-binaries.test.ts scripts/musl-release.test.ts scripts/ci-release-publish.test.ts scripts/release.test.ts",
+		"test:scripts": "bun test scripts/ci-test-ts.test.ts scripts/ci-release-build-binaries.test.ts scripts/musl-release.test.ts scripts/ci-release-publish.test.ts scripts/release.test.ts scripts/package-manager-pin.test.ts",
 		"test:rs": "bun scripts/run-rs-task.ts test:rs",
 		"check": "bun run --parallel check:ts check:rs",
-		"check:ts": "bun run check:tools && bun run --filter './packages/*' --sequential --if-present check:types",
+		"check:ts": "bun run check:tools && bun run --filter './packages/*' --if-present check:types",
 		"check:tools": "oxlint . && oxfmt --check 'packages/*/src/**/*.{ts,tsx}' 'packages/*/{test,bench,examples,scripts}/**/*.ts' 'packages/*/*.ts' 'scripts/**/*.ts'",
 		"check:rs": "bun scripts/run-rs-task.ts check:rs",
 		"lint": "bun run --parallel lint:ts lint:rs",
@@ -204,7 +204,7 @@
 			"oxfmt"
 		]
 	},
-	"packageManager": "bun@>=1.4",
+	"packageManager": "bun@1.4.2",
 	"patchedDependencies": {
 		"@ark/schema@0.56.2": "patches/@ark%2Fschema@0.56.2.patch",
 		"puppeteer-core@25.3.0": "patches/puppeteer-core@25.3.0.patch"
