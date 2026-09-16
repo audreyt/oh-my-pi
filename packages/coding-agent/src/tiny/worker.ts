@@ -245,9 +245,6 @@ class OnnxModel {
 	}
 
 	async chat(request: Extract<TinyWorkerRequest, { type: "chat" }>, reply: ReplyTransport): Promise<string> {
-		if (isFoundationModelsSpec(this.#spec)) {
-			return chatWithFoundationModels(this.#modelKey, this.#spec, request);
-		}
 		const generator = await this.pipeline(reply, request.id);
 		const rendered = renderTextChatTemplate(generator.tokenizer, request.messages, {
 			addGenerationPrompt: true,
@@ -358,11 +355,6 @@ export async function startTinyWorkerFromEnvironment(): Promise<void> {
 		idleMs: Number(process.env[TINY_WORKER_IDLE_MS_ENV]) || TINY_WORKER_IDLE_MS,
 		async handle(request, reply) {
 			if (request.type === "load") {
-				if (isFoundationModelsSpec(spec)) {
-					await probeFoundationModels(reply, request.id, modelKey, spec);
-					reply.send({ type: "loaded", id: request.id });
-					return;
-				}
 				await model.pipeline(reply, request.id);
 				model.sendReady(reply, request.id);
 				reply.send({ type: "loaded", id: request.id });
