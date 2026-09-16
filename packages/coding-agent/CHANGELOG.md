@@ -123,6 +123,8 @@
 - Retry fallback chains now support per-model reasoning efforts: a fallback entry may carry an explicit thinking suffix (`"default": ["openai/gpt-5-mini:low"]`), and pressing `t` on a fallback row in `/models` sets or clears it. Bare entries keep inheriting the failing turn's effort. ([#11842](https://github.com/can1357/oh-my-pi/pull/11842) by [@H4vC](https://github.com/H4vC)).
 - Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
 - Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
+- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
+- Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
 
 ### Fixed
 

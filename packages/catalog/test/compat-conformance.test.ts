@@ -35,6 +35,10 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	// User-configured models.yml provider pointing at
 	// https://inference-api.nousresearch.com/v1 (NousResearch inference API).
 	"nous",
+	// Hosted image-generation default for Meta Model API (packages/coding-agent/src/tools/image-gen.ts)
+	"meta-image",
+	// Hosted image-generation default for the Gemini backend (same tool)
+	"gemini-image",
 ]);
 
 function collectReferencedProviders(): Map<string, string> {
@@ -110,6 +114,20 @@ describe("compat rules conformance", () => {
 				// Provider-scoped family selectors must name a family of SOME class.
 				const known = rules.taxonomy.classes.some(cls => cls.families.some(f => f.id === rule.family));
 				if (!known) offenders.push(`family ${rule.family} (${rule.source})`);
+			}
+		}
+		expect(offenders).toEqual([]);
+	});
+
+	test("every image-provider backend has a hosted default or its own model", () => {
+		// generate_image resolves model-less backends via hostedDefaultModel(`${backend}-image`)
+		// and throws without one; credential-driven backends carry their own model instead.
+		const credentialDriven = new Set(["openai", "antigravity", "xai", "openrouter", "deepinfra"]);
+		const defaults = new Set(rules.behavior.hostedDefaults.map(entry => entry.provider));
+		const offenders: string[] = [];
+		for (const entry of rules.behavior.imageProviders) {
+			if (!credentialDriven.has(entry.backend) && !defaults.has(`${entry.backend}-image`)) {
+				offenders.push(entry.backend);
 			}
 		}
 		expect(offenders).toEqual([]);
