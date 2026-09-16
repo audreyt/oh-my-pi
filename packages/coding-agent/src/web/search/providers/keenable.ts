@@ -20,7 +20,7 @@ import { formatQuery, parseSearchQuery } from "../query";
 import { clampNumResults, dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
-import { classifyProviderHttpError, withHardTimeout } from "./utils";
+import { classifyProviderHttpError, normalizeSearchText, withHardTimeout } from "./utils";
 
 const DEFAULT_NUM_RESULTS = 10;
 const MAX_NUM_RESULTS = 50;
@@ -122,7 +122,7 @@ function toSearchResponse(
 		if (!hit || typeof hit.url !== "string" || !hit.url) continue;
 		const published = publishedDate(hit.published_at);
 		sources.push({
-			title: typeof hit.title === "string" && hit.title ? hit.title : hit.url,
+			title: normalizeSearchText(hit.title) ?? hit.url,
 			url: hit.url,
 			snippet: snippetOf(hit),
 			publishedDate: published,
