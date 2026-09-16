@@ -192,6 +192,40 @@ describe("Keenable web search provider", () => {
 		expect(response.sources.map(source => source.ageSeconds)).toEqual([undefined, undefined, undefined]);
 	});
 
+	it("collapses tabs and newlines in snippets and descriptions", async () => {
+		const fetchMock = async (): Promise<Response> =>
+			new Response(
+				JSON.stringify({
+					query: "snippet whitespace",
+					results: [
+						{
+							title: "Snippet",
+							url: "https://example.com/snippet",
+							snippet: "line one\tline two\nline three",
+						},
+						{
+							title: "Description",
+							url: "https://example.com/description",
+							description: "desc\twith\nbreaks",
+						},
+					],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+
+		const response = await searchKeenable({
+			...makeParams("snippet whitespace"),
+			numSearchResults: 2,
+			fetch: fetchMock,
+		});
+
+		// Raw whitespace would split the rendered Markdown and tool result.
+		expect(response.sources.map(source => source.snippet)).toEqual([
+			"line one line two line three",
+			"desc with breaks",
+		]);
+	});
+
 	it.each([
 		{
 			name: "maps a bare positive site natively",

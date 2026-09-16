@@ -73,9 +73,7 @@ export function buildRequestBody(params: KeenableSearchParams): Record<string, u
 }
 
 function snippetOf(hit: KeenableSearchHit): string | undefined {
-	if (typeof hit.snippet === "string" && hit.snippet.trim()) return hit.snippet.trim();
-	if (typeof hit.description === "string" && hit.description.trim()) return hit.description.trim();
-	return undefined;
+	return normalizeSearchText(hit.snippet) ?? normalizeSearchText(hit.description);
 }
 
 async function callKeenableSearch(
