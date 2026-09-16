@@ -5,6 +5,12 @@
 ### Added
 
 - Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Requests use the Responses API and default to async `flex`; `/fast` switches a turn to realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+- Added the `max` thinking-effort tier to Muse Spark 1.3 and its contributor variant on reseller hosts and Command Code, with the ladder owned by the class lineage.
+
+### Fixed
+
+- Existing model caches no longer hide Muse Spark 1.3's new `max` thinking effort after upgrading.
+- Vercel's Muse Spark Anthropic route retains its supported thinking ladder instead of offering a duplicate `max` budget.
 
 ## [18.2.1] - 2026-09-15
 

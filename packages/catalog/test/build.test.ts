@@ -400,6 +400,10 @@ describe("xAI Responses reasoning-effort suppression", () => {
 				input: ["text", "image"],
 			}),
 		);
+		// Upstream policy (classes/meta.kdl): Meta documents `max` for the
+		// 1.3 standard SKU only; the contributor SKU keeps the five-tier
+		// ladder. The `-free` billing variant below is the branch's residue
+		// coverage and keeps its own exact-id rule.
 		expect(contributor.thinking?.efforts).toEqual([
 			Effort.Minimal,
 			Effort.Low,
@@ -1320,12 +1324,16 @@ describe("model cache materialized round trip", () => {
 				const model = resolved.models.find(candidate => candidate.id === id);
 				expect(model?.thinking?.efforts).toEqual(bundled?.thinking?.efforts);
 			}
-			expect(resolved.models.find(candidate => candidate.id === "muse-spark-1.3")?.thinking?.efforts).toContain(
-				Effort.Max,
-			);
-			expect(
-				resolved.models.find(candidate => candidate.id === "muse-spark-1.3-contributor")?.thinking?.efforts,
-			).not.toContain(Effort.Max);
+			// Upstream policy: `max` is documented for the 1.3 standard SKU
+			// only; the contributor SKU keeps the five-tier ladder.
+			expect(resolved.models.find(model => model.id === "muse-spark-1.3")?.thinking?.efforts).toContain(Effort.Max);
+			expect(resolved.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts).toEqual([
+				Effort.Minimal,
+				Effort.Low,
+				Effort.Medium,
+				Effort.High,
+				Effort.XHigh,
+			]);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
@@ -1355,9 +1363,13 @@ describe("model cache materialized round trip", () => {
 			const cached = readModelCache<"openai-responses">("meta", Infinity, Date.now, dbPath);
 			expect(cached).not.toBeNull();
 			expect(cached?.models.find(model => model.id === "muse-spark-1.3")?.thinking?.efforts).toContain(Effort.Max);
-			expect(
-				cached?.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts,
-			).not.toContain(Effort.Max);
+			expect(cached?.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts).toEqual([
+				Effort.Minimal,
+				Effort.Low,
+				Effort.Medium,
+				Effort.High,
+				Effort.XHigh,
+			]);
 			expect(cached?.models.find(model => model.id === authored.id)?.thinking?.efforts).toEqual(authoredEfforts);
 
 			const offline = await resolveProviderModels<"openai-responses">(
@@ -1369,9 +1381,13 @@ describe("model cache materialized round trip", () => {
 				"offline",
 			);
 			expect(offline.models.find(model => model.id === "muse-spark-1.3")?.thinking?.efforts).toContain(Effort.Max);
-			expect(
-				offline.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts,
-			).not.toContain(Effort.Max);
+			expect(offline.models.find(model => model.id === "muse-spark-1.3-contributor")?.thinking?.efforts).toEqual([
+				Effort.Minimal,
+				Effort.Low,
+				Effort.Medium,
+				Effort.High,
+				Effort.XHigh,
+			]);
 			expect(offline.models.find(model => model.id === authored.id)?.thinking?.efforts).toEqual(authoredEfforts);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
