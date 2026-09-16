@@ -716,8 +716,8 @@ export class ModelControls {
 		return Object.keys(this.#serviceTierByFamily).length > 0 ? this.#serviceTierByFamily : null;
 	}
 
-	/** Set one family's tier (or clear it with `undefined`); persists the change. */
-	setServiceTierFamily(family: ServiceTierFamily, tier: ServiceTier | undefined): void {
+	/** Set one family's tier (`"none"` explicitly omits, `undefined` clears); persists the change. */
+	setServiceTierFamily(family: ServiceTierFamily, tier: ServiceTier | "none" | undefined): void {
 		if (this.#serviceTierByFamily[family] === tier) return;
 		const next: ServiceTierByFamily = { ...this.#serviceTierByFamily };
 		if (tier) next[family] = tier;
