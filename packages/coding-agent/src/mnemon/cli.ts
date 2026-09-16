@@ -1,9 +1,8 @@
-import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { StringDecoder } from "node:string_decoder";
-import { $which } from "@oh-my-pi/pi-utils";
+import { $which, toError } from "@oh-my-pi/pi-utils";
+import type { Subprocess } from "bun";
 
 const MAX_OUTPUT_BYTES = 256 * 1024;
 const KILL_GRACE_MS = 1_500;
@@ -41,74 +40,86 @@ export function findMnemonCommand(configured?: string) {
 	return $which("mnemon") ?? COMMON_PATHS.find(candidate => fs.existsSync(candidate)) ?? "mnemon";
 }
 
-async function spawnOnce(command: string, args: string[], options: MnemonRunOptions = {}) {
-	const { promise, resolve, reject } = Promise.withResolvers<MnemonProcessResult>();
-	const child = spawn(command, args, {
-		stdio: ["ignore", "pipe", "pipe"],
-		shell: false,
-		env: process.env,
-		windowsHide: true,
-	});
+async function spawnOnce(
+	command: string,
+	args: string[],
+	options: MnemonRunOptions = {},
+): Promise<MnemonProcessResult> {
+	const timeoutMs = options.timeoutMs ?? 8_000;
+	let child: Subprocess;
+	try {
+		child = Bun.spawn([command, ...args], {
+			stdin: "ignore",
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+	} catch (error) {
+		throw new Error(`failed to launch mnemon (${JSON.stringify(command)}): ${toError(error).message}`);
+	}
+	const stdoutStream = child.stdout as ReadableStream<Uint8Array>;
+	const stderrStream = child.stderr as ReadableStream<Uint8Array>;
+	const stdoutDecoder = new TextDecoder();
+	const stderrDecoder = new TextDecoder();
 	let stdout = "";
 	let stderr = "";
-	const stdoutDecoder = new StringDecoder("utf8");
-	const stderrDecoder = new StringDecoder("utf8");
 	let bytes = 0;
-	let settled = false;
 	let pendingError: Error | null = null;
 	let killTimer: Timer | undefined;
-	const timeoutMs = options.timeoutMs ?? 8_000;
 
-	const finish = (error: Error | null, result?: MnemonProcessResult) => {
-		if (settled) return;
-		settled = true;
-		clearTimeout(timeout);
-		clearTimeout(killTimer);
-		options.signal?.removeEventListener("abort", onAbort);
-		if (error) reject(error);
-		else resolve(result!);
-	};
 	const stop = (error: Error) => {
 		pendingError = error;
-		if (child.exitCode !== null || child.signalCode !== null) {
-			return;
+		if (child.exitCode !== null) return;
+		try {
+			child.kill("SIGTERM");
+		} catch {
+			// Exited between the check and the signal.
 		}
-		child.kill("SIGTERM");
-		killTimer = setTimeout(() => {
-			if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+		killTimer ??= setTimeout(() => {
+			if (child.exitCode === null) {
+				try {
+					child.kill("SIGKILL");
+				} catch {
+					// Exited between the check and the signal.
+				}
+			}
 		}, KILL_GRACE_MS);
 	};
 	const onAbort = () => {
 		stop(new Error(`mnemon aborted: ${String(options.signal?.reason ?? "cancelled")}`));
 	};
-	const append = (kind: "stdout" | "stderr", chunk: Buffer) => {
-		bytes += chunk.byteLength;
-		if (bytes > MAX_OUTPUT_BYTES) {
-			stop(new Error(`mnemon output exceeded ${MAX_OUTPUT_BYTES} bytes`));
-			return;
+	const pump = async (stream: ReadableStream<Uint8Array>, decoder: TextDecoder, kind: "stdout" | "stderr") => {
+		for await (const value of stream) {
+			bytes += value.byteLength;
+			if (bytes > MAX_OUTPUT_BYTES) {
+				stop(new Error(`mnemon output exceeded ${MAX_OUTPUT_BYTES} bytes`));
+				return;
+			}
+			const text = decoder.decode(value, { stream: true });
+			if (kind === "stdout") stdout += text;
+			else stderr += text;
 		}
-		const text = kind === "stdout" ? stdoutDecoder.write(chunk) : stderrDecoder.write(chunk);
-		if (kind === "stdout") stdout += text;
-		else stderr += text;
 	};
 
-	child.stdout.on("data", (chunk: Buffer) => append("stdout", chunk));
-	child.stderr.on("data", (chunk: Buffer) => append("stderr", chunk));
-	child.on("error", (error: Error) => {
-		finish(new Error(`failed to launch mnemon (${JSON.stringify(command)}): ${error.message}`));
-	});
-	child.on("close", exitCode => {
-		stdout += stdoutDecoder.end();
-		stderr += stderrDecoder.end();
-		finish(pendingError, pendingError ? undefined : { stdout, stderr, exitCode });
-	});
 	const timeout = setTimeout(() => {
 		stop(new Error(`mnemon did not respond within ${timeoutMs}ms`));
 	}, timeoutMs);
-
 	if (options.signal?.aborted) onAbort();
 	else options.signal?.addEventListener("abort", onAbort, { once: true });
-	return promise;
+	try {
+		const [, , exitCode] = await Promise.all([
+			pump(stdoutStream, stdoutDecoder, "stdout"),
+			pump(stderrStream, stderrDecoder, "stderr"),
+			child.exited,
+		]);
+		stdout += stdoutDecoder.decode();
+		stderr += stderrDecoder.decode();
+		if (pendingError) throw pendingError;
+		return { stdout, stderr, exitCode };
+	} finally {
+		clearTimeout(timeout);
+		clearTimeout(killTimer);
+		options.signal?.removeEventListener("abort", onAbort);
+	}
 }
 
 export function createMnemonCli(command = findMnemonCommand()): MnemonCli {
