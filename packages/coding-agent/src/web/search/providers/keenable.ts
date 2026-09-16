@@ -72,10 +72,6 @@ export function buildRequestBody(params: KeenableSearchParams): Record<string, u
 	return body;
 }
 
-function publishedDate(value: unknown): string | undefined {
-	return typeof value === "string" && value.trim() ? value : undefined;
-}
-
 function snippetOf(hit: KeenableSearchHit): string | undefined {
 	if (typeof hit.snippet === "string" && hit.snippet.trim()) return hit.snippet.trim();
 	if (typeof hit.description === "string" && hit.description.trim()) return hit.description.trim();
@@ -120,7 +116,7 @@ function toSearchResponse(
 	for (const value of results) {
 		const hit = asRecord(value);
 		if (!hit || typeof hit.url !== "string" || !hit.url) continue;
-		const published = publishedDate(hit.published_at);
+		const published = normalizeSearchText(hit.published_at);
 		sources.push({
 			title: normalizeSearchText(hit.title) ?? hit.url,
 			url: hit.url,
