@@ -40,7 +40,6 @@ export interface KeenableSearchParams {
 	published_after?: string;
 	published_before?: string;
 	signal?: AbortSignal;
-
 	fetch?: FetchImpl;
 }
 

@@ -10,6 +10,7 @@ import type { SearchProviderError } from "@oh-my-pi/pi-coding-agent/web/search/t
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 
 const originalKeenableApiKey = process.env.KEENABLE_API_KEY;
+
 describe("Keenable web search provider", () => {
 	beforeEach(() => {
 		process.env.KEENABLE_API_KEY = "test-keenable-key";
@@ -66,6 +67,7 @@ describe("Keenable web search provider", () => {
 		expect(sentKeys).toEqual(["rejected-key", "working-key", "working-key"]);
 		expect(response.sources[0]?.url).toBe("https://example.com/found");
 	});
+
 	it("maps Keenable hits into SearchResponse and forwards recency as published_after", async () => {
 		let requestUrl = "";
 		let requestHeaders: Headers | undefined;
@@ -203,6 +205,7 @@ describe("Keenable web search provider", () => {
 		});
 		expect(requestBody).not.toHaveProperty("site");
 	});
+
 	it("maps after:/before: to published_after/published_before instead of recency", async () => {
 		expect(
 			buildRequestBody({
@@ -336,6 +339,7 @@ describe("Keenable web search provider", () => {
 		]);
 		expect(response.sources).toEqual([]);
 	});
+
 	it("uses the public search endpoint when no credential is configured", async () => {
 		delete process.env.KEENABLE_API_KEY;
 		let requestUrl = "";
