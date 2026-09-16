@@ -161,6 +161,37 @@ describe("Keenable web search provider", () => {
 		expect(response.sources.map(source => source.title)).toEqual(["Spaced Out Title", "https://example.com/blank"]);
 	});
 
+	it("normalizes malformed publication dates to a single line", async () => {
+		const fetchMock = async (): Promise<Response> =>
+			new Response(
+				JSON.stringify({
+					query: "date handling",
+					results: [
+						{ title: "Tab date", url: "https://example.com/tab", published_at: "not\ta\nreal\tdate" },
+						{ title: "Relative", url: "https://example.com/rel", published_at: "3 days ago" },
+						{ title: "Blank", url: "https://example.com/blank", published_at: "  \t " },
+					],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+
+		const response = await searchKeenable({
+			...makeParams("date handling"),
+			numSearchResults: 3,
+			fetch: fetchMock,
+		});
+
+		// Verbatim tabs/newlines would corrupt the framed source-row metadata.
+		expect(response.sources.map(source => source.publishedDate)).toEqual([
+			"not a real date",
+			"3 days ago",
+			undefined,
+		]);
+		// Unparseable dates yield no age; relative strings stay intact for
+		// the query-layer fallback to interpret.
+		expect(response.sources.map(source => source.ageSeconds)).toEqual([undefined, undefined, undefined]);
+	});
+
 	it.each([
 		{
 			name: "maps a bare positive site natively",
