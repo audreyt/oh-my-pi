@@ -132,6 +132,35 @@ describe("Keenable web search provider", () => {
 		expect(response.sources[0]?.ageSeconds).toBeTypeOf("number");
 	});
 
+	it("collapses tabs and newlines in result titles", async () => {
+		const fetchMock = async (): Promise<Response> =>
+			new Response(
+				JSON.stringify({
+					query: "whitespace titles",
+					results: [
+						{
+							title: "  Spaced\tOut\nTitle  ",
+							url: "https://example.com/spaced",
+						},
+						{
+							title: "  \t ",
+							url: "https://example.com/blank",
+						},
+					],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+
+		const response = await searchKeenable({
+			...makeParams("whitespace titles"),
+			numSearchResults: 2,
+			fetch: fetchMock,
+		});
+
+		// A verbatim tab/newline would break the framed source-tree layout.
+		expect(response.sources.map(source => source.title)).toEqual(["Spaced Out Title", "https://example.com/blank"]);
+	});
+
 	it.each([
 		{
 			name: "maps a bare positive site natively",
