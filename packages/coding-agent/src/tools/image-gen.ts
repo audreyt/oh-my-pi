@@ -492,7 +492,15 @@ async function postImageEndpointRequest(options: {
 			// defaults as object keys would duplicate a caller field spelled
 			// with different casing (fetch coalesces the pair into one
 			// comma-joined value).
-			setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
+			// A keyless provider (`auth: none`) resolves to the `N/A`
+			// sentinel rather than a real key; like
+			// resolveOpenAIRequestSetup, send no generated Authorization
+			// then — a proxy that authenticates via its own headers would
+			// reject the bogus bearer. An explicitly configured
+			// Authorization header still flows through either way.
+			if (isAuthenticated(key)) {
+				setHeaderIfAbsent(headers, "Authorization", `Bearer ${key}`);
+			}
 			setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
 			setHeaderIfAbsent(headers, "Content-Type", "application/json");
 			const resp = await options.fetchImpl(options.url, {

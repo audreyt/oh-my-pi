@@ -1592,6 +1592,53 @@ describe("imageGenTool", () => {
 		expect(result.details?.provider).toBe("meta");
 	});
 
+	it("omits generated Authorization for keyless Meta proxies", async () => {
+		let requestHeaders: Headers | undefined;
+
+		const fetchMock: typeof fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+			requestHeaders = new Headers(init?.headers);
+			return new Response(
+				JSON.stringify({ data: [{ b64_json: Buffer.from("fake-meta-image").toString("base64"), url: null }] }),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}) as unknown as typeof fetch;
+
+		const ctx: CustomToolContext = {
+			fetch: fetchMock,
+			sessionManager: {
+				getCwd: () => "/tmp",
+				getSessionId: () => "test-session",
+			} as unknown as ReadonlySessionManager,
+			modelRegistry: {
+				// `auth: none` in models.yml resolves to the `N/A` sentinel.
+				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "N/A" : undefined),
+				getProviderBaseUrl: () => undefined,
+				getProviderHeaders: (provider: string) => (provider === "meta" ? { "x-api-key": "proxy-key" } : undefined),
+				getAll: () => [],
+				authStorage: { rotateSessionCredential: async () => false },
+				resolver: () => async () => "N/A",
+			} as unknown as ModelRegistry,
+			model: undefined,
+			isIdle: () => true,
+			hasQueuedMessages: () => false,
+			abort: () => {},
+		};
+
+		const result = await imageGenTool.execute(
+			"call-meta-keyless",
+			{ subject: "a cat", provider: "meta" },
+			undefined,
+			ctx,
+		);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		// A generated `Bearer N/A` would make a proxy that authenticates via
+		// its own headers reject the request.
+		expect(requestHeaders?.get("authorization")).toBeNull();
+		expect(requestHeaders?.get("x-api-key")).toBe("proxy-key");
+		expect(result.details?.provider).toBe("meta");
+	});
+
 	it("prefers the active Meta provider over unrelated credentialed providers", async () => {
 		const requestUrls: string[] = [];
 		const model = {
