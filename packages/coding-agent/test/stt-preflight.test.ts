@@ -283,6 +283,7 @@ describe("STTController preflight", () => {
 		expect(createCapture).not.toHaveBeenCalled();
 		expect(options.showWarning).not.toHaveBeenCalled();
 	});
+
 	it("stops recording and surfaces asynchronous microphone failures", async () => {
 		vi.spyOn(downloader, "isSttModelCached").mockResolvedValue(true);
 		vi.spyOn(downloader, "downloadSttModel").mockReturnValue(new Promise<void>(() => {}));

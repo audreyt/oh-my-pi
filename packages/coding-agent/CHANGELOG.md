@@ -77,6 +77,12 @@
 - Added a third state to the git TUI whitespace toggle (`b`): beyond ignoring whitespace-only line changes, it hides formatting-only changes (indentation, line splits/joins, blank lines) and import-only changes in TypeScript/JavaScript, Rust, and Go
 - Compressed single-child directory chains in the sidebar tree view
 - Split pure additions (new/untracked files) into their own list below tracked changes in each git TUI file section, separated by a rule; addition rows drop the redundant status letter and deleted files render struck through
+- Added opt-in Apple SpeechAnalyzer speech-to-text on macOS 26+, with live partials and system-managed locale assets.
+- Git and Jujutsu operations now run in-process (gitoxide/jj-lib) instead of spawning `git`/`jj` subprocesses — faster status lines, diffs, staging, and worktree operations. The git binary is only used for credential-bound network transfers (push/fetch/clone) and reftable repositories.
+- Status lines, footers, reviews, project identity, cleanse, and autoresearch reads now work in pure Jujutsu workspaces as well as Git checkouts.
+- Include token usage statistics in inspect_image tool output
+- Pressing the session model shortcut (alt+p) again inside the picker toggles a red Task mode that switches the Task subagent's model for this session instead.
+- Git TUI: an AI staging wand next to "Stage All" asks "What should we stage?" and stages only the matching changes — the tiny/smol model picks the matching files from the whole change list, then filters their hunks in parallel; file-scoped requests ("git stuff") stage the picked files whole, content-scoped ones ("all comment changes") stage only the matching hunks.
 
 ### Changed
 
@@ -117,6 +123,8 @@
 - `/usage` now shows prepaid credit balances (e.g. Charm Hyper's `100 credits left`) on the provider cards and account summaries instead of `no data` ([#11656](https://github.com/can1357/oh-my-pi/pull/11656) by [@oldschoola](https://github.com/oldschoola)).
 - Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
 - Retry fallback chains now support per-model reasoning efforts: a fallback entry may carry an explicit thinking suffix (`"default": ["openai/gpt-5-mini:low"]`), and pressing `t` on a fallback row in `/models` sets or clears it. Bare entries keep inheriting the failing turn's effort. ([#11842](https://github.com/can1357/oh-my-pi/pull/11842) by [@H4vC](https://github.com/H4vC)).
+- Added Apple SpeechAnalyzer native speech-to-text on macOS 26+ ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
+- Added the `retry.waitForUsageReset` setting: when a provider reports usage-limit exhaustion with a reset time (5-hour or weekly quota windows on any provider), the session sleeps until the reset instead of failing fast past `retry.maxDelayMs`.
 
 ### Fixed
 

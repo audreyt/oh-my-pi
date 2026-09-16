@@ -514,7 +514,7 @@ export class AppleSpeechClient {
 			stop: async () => {
 				if (!closing && !settled) {
 					closing = true;
-					await Promise.all(pendingWrites);
+					await Promise.all([...pendingWrites]);
 					try {
 						proc.stdin.end();
 					} catch (error) {
