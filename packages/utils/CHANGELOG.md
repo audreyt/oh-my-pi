@@ -29,6 +29,14 @@
 ### Added
 
 - Added asynchronous and synchronous SQLite database opening APIs with path-attributed errors, optional corruption recovery that preserves private database and sidecar backups, and automatic retries for transient busy errors during asynchronous opens.
+### Added
+
+- `withFileLock` now rejects with a typed `LockAcquireError` when the retry budget is exhausted, so callers can detect contention without matching the message text.
+
+### Fixed
+
+- Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
+- `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
 
 ## [18.2.1] - 2026-09-15
 
@@ -91,7 +99,6 @@
 
 ### Added
 
-- `withFileLock` now rejects with a typed `LockAcquireError` when the retry budget is exhausted, so callers can detect contention without matching the message text.
 - Added public `acquireFileLock()` and `FileLockHandle` APIs for holding and explicitly releasing exclusive OS-backed file locks.
 
 ### Fixed
