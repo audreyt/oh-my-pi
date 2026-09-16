@@ -10,6 +10,10 @@
 ### Changed
 
 - `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+### Fixed
+
+- Corrupt credential databases are preserved as private `.corrupt-*` backups and recreated instead of aborting startup; log in again to restore credentials.
+- Fixed malformed Anthropic thinking signatures freezing sessions at 100% CPU by bounding protobuf tags and lengths and preventing signed length overflow.
 
 ## [18.2.1] - 2026-09-15
 

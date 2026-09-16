@@ -12,6 +12,9 @@
 
 - Existing model caches no longer hide Muse Spark 1.3's new `max` thinking effort after upgrading.
 - Vercel's Muse Spark Anthropic route retains its supported thinking ladder instead of offering a duplicate `max` budget.
+### Fixed
+
+- Model-cache corruption recovery now preserves private database and sidecar backups and avoids replacing a cache already recovered by another process.
 
 ## [18.2.1] - 2026-09-15
 
