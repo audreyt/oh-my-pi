@@ -36,6 +36,7 @@
 - Fixed `mnemon` executable resolution to fail loudly if an explicitly configured path does not exist, instead of silently falling back to a binary found on `PATH`
 - Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
 - Keenable recency retries now share the original search timeout and retain rotated credentials instead of retrying a rejected key.
+- Extensions can set the `none` service-tier sentinel via `setServiceTier`, opting Doubleword sessions back onto standard processing instead of throwing.
 
 ## [18.2.1] - 2026-09-15
 
