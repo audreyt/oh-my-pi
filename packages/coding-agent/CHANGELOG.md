@@ -5,6 +5,11 @@
 ### Added
 
 - Added `tui.titleSpinner` (`braille` | `dots` | `line`, default `braille`) to pick the terminal-title working-state spinner glyphs alongside the existing `tui.titleState` on/off toggle.
+- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
+### Changed
+
+- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.2.1] - 2026-09-15
 
@@ -441,11 +446,6 @@
 - Native background security scans now accept provider-owned AWS authentication for Amazon Bedrock and Bedrock Mantle without requiring a stored OAuth account ([#12013](https://github.com/can1357/oh-my-pi/issues/12013)).
 
 ## [18.1.21] - 2026-09-14
-- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
-
-### Changed
-
-- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ### Fixed
 
