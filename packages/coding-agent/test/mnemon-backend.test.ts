@@ -577,6 +577,46 @@ exit 1
 		expect(readLog(logPath)).toHaveLength(0);
 	});
 
+	it("serializes overlapping agent_end retentions instead of duplicating the tail", async () => {
+		const logPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "mnemon-retain-log-")), "log.txt");
+		const cli = makeFakeCli(logPath);
+		const settings = Settings.isolated({
+			"memory.backend": "mnemon",
+			"mnemon.cliPath": cli,
+			"mnemon.retainEveryNTurns": 2,
+		});
+		const listeners: Array<(event: unknown) => void> = [];
+		const session = makeSession(
+			settings,
+			[
+				userEntry("first question"),
+				assistantEntry("first answer"),
+				userEntry("second question"),
+				assistantEntry("second answer"),
+			],
+			listeners,
+		);
+
+		await mnemonBackend.start({
+			session,
+			settings,
+			modelRegistry: {} as never,
+			agentDir: "/tmp/agent",
+			taskDepth: 0,
+		});
+		// Two turns end before either retention finishes.
+		listeners[0]!({ type: "agent_end", messages: [] });
+		listeners[0]!({ type: "agent_end", messages: [] });
+		await getMnemonSessionState(session)?.retainInFlight;
+
+		// Without chaining, both tails compute against lastRetainedTurn 0
+		// and the CLI queue writes the same slice twice.
+		const lines = readLog(logPath);
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toContain("first question");
+		expect(lines[0]).toContain("second answer");
+	});
+
 	it("disposeMnemonSessionState unsubscribes listeners and clears state", async () => {
 		const logPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "mnemon-retain-log-")), "log.txt");
 		const cli = makeFakeCli(logPath);
