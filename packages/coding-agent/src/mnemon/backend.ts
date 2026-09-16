@@ -16,6 +16,7 @@ import type {
 	MemoryBackendSearchItem,
 	MemoryBackendStartOptions,
 	MemoryBackendStatus,
+	MemoryPromptPreparation,
 } from "../memory-backend/types";
 import mnemonCompactionTemplate from "../prompts/memories/mnemon-compaction.md" with { type: "text" };
 import mnemonFirstTurnTemplate from "../prompts/memories/mnemon-first-turn.md" with { type: "text" };
@@ -273,13 +274,12 @@ export const mnemonBackend: MemoryBackend = {
 		return rendered || undefined;
 	},
 
-	async beforeAgentStartPrompt(session, promptText) {
+	async beforeAgentStartPrompt(session, promptText): Promise<MemoryPromptPreparation | undefined> {
 		const state = getMnemonSessionState(session);
 		const primary = state?.aliasOf ?? state;
 		if (!primary?.config.autoRecall || primary.hasRecalledForFirstTurn) return undefined;
 		const query = focusMnemonQuery(promptText);
 		if (!query) return undefined;
-		primary.hasRecalledForFirstTurn = true;
 		try {
 			const filtered = await recall(primary.cli, query, primary.config.recallLimit, "silent");
 			if (filtered.results.length === 0) return undefined;
@@ -289,8 +289,18 @@ export const mnemonBackend: MemoryBackend = {
 					dropped: filtered.dropped > 0 ? filtered.dropped : undefined,
 				})
 				.trim();
-			primary.lastRecallSnippet = snippet;
-			return snippet;
+			if (!snippet) return undefined;
+			return {
+				context: snippet,
+				commit: () => {
+					const current = getMnemonSessionState(session);
+					if ((current?.aliasOf ?? current) !== primary) return false;
+					if (primary.hasRecalledForFirstTurn) return false;
+					primary.hasRecalledForFirstTurn = true;
+					primary.lastRecallSnippet = snippet;
+					return true;
+				},
+			};
 		} catch (error) {
 			logger.debug("Mnemon: silent recall failed", { error: String(error) });
 			return undefined;

@@ -27,6 +27,7 @@ import {
 	setProfile,
 	VERSION,
 } from "@oh-my-pi/pi-utils/dirs";
+
 import { declareWorkerHostEntry, installWorkerInbox, isWorkerHostSelector } from "@oh-my-pi/pi-utils/worker-host";
 import { extractProfileFlags } from "./cli/profile-bootstrap";
 import {
@@ -69,6 +70,23 @@ function getWorkerParentPort(): MessagePort | null {
 	const workerThreads: typeof WorkerThreads = require("node:worker_threads");
 	return workerThreads.parentPort;
 }
+
+/**
+ * Launch flags that only switch off discovery or persistence. An argv made of
+ * these still enters interactive mode, so the speculative first frame is
+ * valid; anything else (subcommands, `-p`, model/session selectors) skips it.
+ */
+const PREPAINT_SAFE_FLAGS: Record<string, true> = {
+	"--no-session": true,
+	"--no-extensions": true,
+	"--no-skills": true,
+	"--no-rules": true,
+	"--no-tools": true,
+	"--no-lsp": true,
+	"--no-title": true,
+	"--no-prewalk": true,
+	"--no-pty": true,
+};
 
 /** Complete the OS-visible process-name setup after speculative first paint. */
 async function setFullProcessName(): Promise<void> {
@@ -529,7 +547,7 @@ export async function runCli(argv: string[]): Promise<void> {
 		!process.env.PI_TIMING &&
 		process.stdin.isTTY === true &&
 		process.stdout.isTTY === true &&
-		(resolvedArgv.length === 0 || (resolvedArgv.length === 1 && resolvedArgv[0] === "--no-session"))
+		resolvedArgv.every(arg => PREPAINT_SAFE_FLAGS[arg] === true)
 	) {
 		// Intentional exception to the static-import convention: this latency boundary
 		// keeps the TUI graph out of worker, subcommand, help, and version launches.
@@ -583,6 +601,16 @@ export async function runCli(argv: string[]): Promise<void> {
 // their entry with `import.meta.main === false`, so the worker-host dispatch
 // is admitted via `!Bun.isMainThread`.
 if (isProcessEntry || !Bun.isMainThread) {
+	// A one-shot CLI run (`omp --help | head`, `omp --version | true`, `omp <sub> | grep -m1`)
+	// whose stdout consumer closes before the write drains gets an EPIPE that Bun surfaces as
+	// an unhandled rejection. Treat a vanished stdout peer as an ordinary Unix disconnect
+	// (graceful exit) rather than the fatal path. Interactive launches register their own
+	// terminal lifetime; help/version/subcommand launches never start one. See #10930. The
+	// registration lives for the process — a one-shot entry exits right after runCli settles.
+	if (isProcessEntry) {
+		const { registerStdioDisconnectHandling }: typeof Postmortem = require("@oh-my-pi/pi-utils/postmortem.js");
+		registerStdioDisconnectHandling();
+	}
 	runCli(process.argv.slice(2)).catch(async error => {
 		// Failure boundary: inspector/postmortem is irrelevant to successful startup.
 		const { fatal } = await import("@oh-my-pi/pi-utils/postmortem");
