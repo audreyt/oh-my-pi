@@ -24,7 +24,12 @@ import {
 	sendProgress,
 	type TransformersRuntimeMetadata,
 } from "../subprocess/worker-runtime";
-import { completeAfmCore, foundationModelsUnavailableReason, isAfmModelNotReady, probeAfmCore } from "./apple-fm";
+import {
+	completeAfmCore,
+	foundationModelsUnavailableReason,
+	isAfmRequestScopedFailure,
+	probeAfmCore,
+} from "./apple-fm";
 import { renderTextChatTemplate } from "./completion-prompt";
 import {
 	resolveTinyModelDevicePreference,
@@ -263,64 +268,75 @@ class OnnxModel {
 }
 
 /**
- * Apple Foundation Models path (`afm-core`): OS-owned weights via the
- * `apple-fm` sidecar, served through the same message-level worker protocol so
- * the ONNX and MLX workers stay interchangeable from the client's view.
+ * Apple Foundation Models worker: OS-owned weights behind the bundled
+ * sidecar. There is nothing to download or load, so `pipeline` probes Apple
+ * Intelligence readiness (failing closed while it is off or the model is not
+ * ready) and chat completes through the sidecar. Darwin only — selection
+ * refuses other platforms via {@link foundationModelsUnavailableReason}.
  */
-export async function probeFoundationModels(
-	reply: ReplyTransport,
-	requestId: string,
-	modelKey: TinyLocalModelKey,
-	spec: TinyTitleLocalModelSpec,
-): Promise<void> {
-	const blocked = foundationModelsUnavailableReason(spec);
-	if (blocked) throw new Error(`${modelKey} is unavailable: ${blocked}`);
-	reply.send({
-		type: "progress",
-		id: requestId,
-		event: { modelKey, status: "initiate", name: spec.repo },
-	});
-	const status = await probeAfmCore();
-	if (!status.available) {
-		throw new Error(status.reason ?? "Apple Foundation Model unavailable");
-	}
-	reply.send({
-		type: "progress",
-		id: requestId,
-		event: { modelKey, status: "ready", task: "text-generation", model: spec.repo },
-	});
-}
+class FoundationModelsModel {
+	#spec: TinyTitleLocalModelSpec;
+	#modelKey: TinyLocalModelKey;
+	#probe: Promise<void> | null = null;
 
-export async function chatWithFoundationModels(
-	modelKey: TinyLocalModelKey,
-	spec: TinyTitleLocalModelSpec,
-	request: Extract<TinyWorkerRequest, { type: "chat" }>,
-): Promise<string> {
-	const blocked = foundationModelsUnavailableReason(spec);
-	if (blocked) throw new Error(`${modelKey} is unavailable: ${blocked}`);
-	const instructions = request.messages
-		.filter(message => message.role === "system")
-		.map(message => message.content)
-		.join("\n\n");
-	const prompt = request.messages
-		.filter(message => message.role === "user")
-		.map(message => message.content)
-		.join("\n\n");
-	try {
-		const text = await completeAfmCore({
-			instructions,
-			prompt: request.prefill ? `${prompt}${request.prefill}` : prompt,
+	constructor(modelKey: TinyLocalModelKey, spec: TinyTitleLocalModelSpec) {
+		this.#modelKey = modelKey;
+		this.#spec = spec;
+	}
+
+	async #runProbe(reply: ReplyTransport, requestId: string): Promise<void> {
+		reply.send({
+			type: "progress",
+			id: requestId,
+			event: { modelKey: this.#modelKey, status: "initiate", name: this.#spec.repo },
 		});
-		if (request.stop) {
-			const stopIndex = text.indexOf(request.stop);
-			if (stopIndex >= 0) return text.slice(0, stopIndex);
+		const status = await probeAfmCore();
+		if (!status.available) throw new Error(status.reason ?? "Apple Foundation Model unavailable");
+	}
+
+	/** Readiness probe, standing in for pipeline load (with progress for `requestId`). */
+	pipeline(reply: ReplyTransport, requestId: string): Promise<void> {
+		if (!this.#probe) {
+			const blocked = foundationModelsUnavailableReason(this.#spec);
+			this.#probe = blocked
+				? Promise.reject(new Error(`${this.#modelKey} is unavailable: ${blocked}`))
+				: this.#runProbe(reply, requestId).catch((error: unknown) => {
+						this.#probe = null;
+						throw error;
+					});
 		}
-		return text;
-	} catch (error) {
-		// Model-not-ready maps to empty output (client treats it as no usable
-		// generation and falls back) rather than a worker error.
-		if (isAfmModelNotReady(error)) return "";
-		throw error;
+		return this.#probe;
+	}
+
+	/** Send the `ready` marker the client's download UI waits for. */
+	sendReady(reply: ReplyTransport, requestId: string): void {
+		reply.send({
+			type: "progress",
+			id: requestId,
+			event: { modelKey: this.#modelKey, status: "ready", task: "text-generation", model: this.#spec.repo },
+		});
+	}
+
+	async chat(request: Extract<TinyWorkerRequest, { type: "chat" }>, reply: ReplyTransport): Promise<string> {
+		await this.pipeline(reply, request.id);
+		const instructions = request.messages.find(message => message.role === "system")?.content ?? "";
+		const prompt = request.messages
+			.filter(message => message.role === "user")
+			.map(message => message.content)
+			.join("\n");
+		try {
+			// Bound AFM completion tokens (1–1024) like the ONNX path caps
+			// generation length; the sidecar has no safe default of its own.
+			const maxTokens = Math.min(Math.max(1, request.maxNewTokens), 1024);
+			return await completeAfmCore({ instructions, prompt, maxTokens });
+		} catch (error) {
+			// Guardrail and empty-text failures are request-scoped: return
+			// empty (the client normalizes it to null) without failing the
+			// worker, so later titles still try AFM. Compile and
+			// availability faults throw and fail closed.
+			if (isAfmRequestScopedFailure(error)) return "";
+			throw error;
+		}
 	}
 }
 
@@ -334,7 +350,9 @@ export async function startTinyWorkerFromEnvironment(): Promise<void> {
 	const spec = getTinyLocalModelSpec(modelKey);
 	if (!spec) throw new Error(`Unknown tiny local model: ${modelKey}`);
 	setProcessName(`omp tiny ${modelKey}`);
-	const model = new OnnxModel(modelKey, spec, resolveTinyModelDevicePreference(), resolveTinyModelDtypeOverride());
+	const model = isFoundationModelsSpec(spec)
+		? new FoundationModelsModel(modelKey, spec)
+		: new OnnxModel(modelKey, spec, resolveTinyModelDevicePreference(), resolveTinyModelDtypeOverride());
 	const server = new TinyWorkerServer({
 		tag,
 		idleMs: Number(process.env[TINY_WORKER_IDLE_MS_ENV]) || TINY_WORKER_IDLE_MS,

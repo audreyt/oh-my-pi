@@ -22,7 +22,7 @@ export interface FileLockHandle {
 	release(): void;
 }
 
-const DEFAULT_OPTIONS = {
+const DEFAULT_OPTIONS: Required<Omit<FileLockOptions, "signal">> = {
 	retries: 50,
 	retryDelayMs: 100,
 } as const;

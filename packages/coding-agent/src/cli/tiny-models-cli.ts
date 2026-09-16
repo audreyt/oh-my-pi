@@ -58,7 +58,8 @@ export function resolveModels(model: string | undefined, mlx = tinyWorkerUsesMlx
 	if (model === "all")
 		return TINY_LOCAL_MODELS.filter(
 			spec =>
-				!isFoundationModelsSpec(spec) && (mlx || !("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason),
+				(mlx || !("onnxUnsupportedReason" in spec) || !spec.onnxUnsupportedReason) &&
+				!(("unsupportedReason" in spec && spec.unsupportedReason) || isFoundationModelsSpec(spec)),
 		).map(spec => spec.key);
 	if (!isTinyLocalModelKey(model)) {
 		const values = TINY_LOCAL_MODELS.map(spec => spec.key).join(", ");

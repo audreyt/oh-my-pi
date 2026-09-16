@@ -18,6 +18,7 @@ import { settings } from "../config/settings";
 import { stageRunnerScript } from "../eval/runner-cache";
 import titleSystemPrompt from "../prompts/system/title-system.md" with { type: "text" };
 import {
+	AFM_CORE_SIDECAR_ENV,
 	completeAfmCore,
 	foundationModelsUnavailableReason,
 	isAfmModelNotReady,
@@ -44,8 +45,8 @@ import {
 	isTinyMemoryLocalModelKey,
 	isTinyTitleLocalModelKey,
 	type TinyLocalModelKey,
-	type TinyTitleLocalModelSpec,
 	type TinyTitleLocalModelKey,
+	type TinyTitleLocalModelSpec,
 } from "./models";
 import { normalizeGeneratedTitle } from "./text";
 import {
@@ -388,14 +389,26 @@ function spawnDetached(
 
 /** How to start the ONNX worker for `modelKey` with the resolved device/dtype env. @internal */
 export function onnxLaunch(modelKey: TinyLocalModelKey, modelEnv: Record<string, string>): WorkerLaunch {
-	const tag = `${packageJson.version}|onnx|${modelEnv.PI_TINY_DEVICE ?? ""}|${modelEnv.PI_TINY_DTYPE ?? ""}`;
+	// Foundation-models specs run through the sidecar, so the sidecar
+	// identity joins the launch tag: swapping the binary (or pointing tests
+	// at per-test fakes) retires the old worker instead of reusing it with
+	// a stale binary baked into its environment.
+	const spec = getTinyLocalModelSpec(modelKey);
+	const afmSuffix =
+		spec && isFoundationModelsSpec(spec) ? `|afm:${process.env[AFM_CORE_SIDECAR_ENV]?.trim() || "bundled"}` : "";
+	const tag = `${packageJson.version}|onnx|${modelEnv.PI_TINY_DEVICE ?? ""}|${modelEnv.PI_TINY_DTYPE ?? ""}${afmSuffix}`;
 	return {
 		backend: "onnx",
 		tag,
 		spawn(endpoint, logPath) {
 			const command = resolveWorkerSpawnCmd(TINY_WORKER_ARG);
+			// The sidecar override is read from process.env at call time, so a
+			// custom sidecar (tests, local builds) must be forwarded
+			// explicitly: worker env is built from the startup snapshot.
+			const sidecar = process.env[AFM_CORE_SIDECAR_ENV]?.trim();
 			const env = inferenceWorkerEnv({
 				...modelEnv,
+				...(sidecar ? { [AFM_CORE_SIDECAR_ENV]: sidecar } : {}),
 				[TINY_WORKER_SOCKET_ENV]: endpoint,
 				[TINY_WORKER_MODEL_ENV]: modelKey,
 				[TINY_WORKER_TAG_ENV]: tag,
@@ -408,8 +421,8 @@ export function onnxLaunch(modelKey: TinyLocalModelKey, modelEnv: Record<string,
 function mlxLaunch(modelKey: TinyLocalModelKey, emitProgress: (event: TinyTitleProgressEvent) => void): WorkerLaunch {
 	const spec = getTinyLocalModelSpec(modelKey);
 	if (!spec) throw new Error(`Unknown tiny local model: ${modelKey}`);
-	if (!spec.mlxRepo) throw new Error(`${modelKey} has no MLX export`);
 	const mlxRepo = spec.mlxRepo;
+	if (!mlxRepo) throw new Error(`Tiny local model ${modelKey} has no MLX export`);
 	const tag = `mlx|${MLX_LM_VERSION}|${Bun.hash.crc32(MLX_SERVER_SCRIPT).toString(16)}`;
 	return {
 		backend: "mlx",
