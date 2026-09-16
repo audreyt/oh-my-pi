@@ -5,19 +5,18 @@
 ### Added
 
 - OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
 
 ### Changed
 
 - `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 ## [18.2.1] - 2026-09-15
 
 ### Added
 
 - Added support for Cerebras Qwen 3.8-27b with improved reasoning effort control
 - Added optional host browser-session callbacks for Perplexity SSO login, keeping browser automation out of pi-ai and preserving email and authenticator-code login.
-### Added
-
-- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
 
 ### Fixed
 
@@ -63,6 +62,13 @@
 
 - 400-request debug dumps now redact provider-specific auth headers (`x-goog-api-key`, `x-amz-security-token`, and any header whose name carries a key/token/secret), not just a fixed allow-list, so a shared dump can no longer leak a live API key ([#12007](https://github.com/can1357/oh-my-pi/issues/12007)).
 - Fixed Doubleword `flex` (async) turns failing as billed "empty stop" errors: Responses output delivered only inside the terminal event is now materialized, and `flex` requests no longer hit realtime stream watchdogs.
+### Added
+
+- OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
+### Changed
+
+- `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.1.20] - 2026-09-13
 
