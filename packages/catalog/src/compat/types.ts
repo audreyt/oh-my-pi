@@ -333,6 +333,8 @@ export interface CompiledBehavior {
 	quotaTiers: CompiledQuotaRule[];
 	hostedDefaults: CompiledHostedDefault[];
 	imageProviders: CompiledImageProvider[];
+	/** Image backends whose generate_image model comes from the active credential. */
+	credentialImageModels: string[];
 	apiRoutes: CompiledApiRoutes[];
 	modelLimits: CompiledModelLimits[];
 	excludeDiscoveryModes: CompiledExcludeDiscoveryModes[];

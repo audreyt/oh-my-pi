@@ -5,7 +5,7 @@
  * model-operations, cursor-effort, cursor-model-parameter, quota-tiers,
  * hosted-default) and adds the pi-only nodes: api-routes, model-limits,
  * exclude-discovery-modes, exclude-models, plan-requirement, pricing-peer,
- * image-provider, and retry-reset-timezone.
+ * image-provider, credential-image-models, and retry-reset-timezone.
  * Every node kind is optional; per-node shapes are strict.
  */
 import type {
@@ -296,6 +296,7 @@ export function compileBehavior(source: { file: string; text: string } | undefin
 		quotaTiers: [],
 		hostedDefaults: [],
 		imageProviders: [],
+		credentialImageModels: [],
 		apiRoutes: [],
 		modelLimits: [],
 		excludeDiscoveryModes: [],
@@ -361,6 +362,13 @@ export function compileBehavior(source: { file: string; text: string } | undefin
 				const backend = requiredProp(node, "backend");
 				if (!provider || !backend || node.args.length > 0) malformed(node);
 				behavior.imageProviders.push({ provider, backend });
+				break;
+			}
+			case "credential-image-models": {
+				ensureLeaf(node, []);
+				const values = positionalStrings(node);
+				if (values.length === 0 || values.some(value => !value)) malformed(node);
+				behavior.credentialImageModels.push(...values);
 				break;
 			}
 			case "api-routes":

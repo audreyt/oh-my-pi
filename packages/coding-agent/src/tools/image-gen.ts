@@ -22,7 +22,7 @@ import {
 	OPENAI_HEADERS,
 	URL_PATHS,
 } from "@oh-my-pi/pi-catalog/wire/codex";
-import { hostedDefaultModel, imageProviderFor } from "@oh-my-pi/pi-catalog/compat/behavior";
+import { hostedDefaultModel, imageProviderFor, isCredentialImageModel } from "@oh-my-pi/pi-catalog/compat/behavior";
 import { META_MODEL_API_BASE_URL } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
 import {
@@ -44,10 +44,6 @@ import imageGenDescription from "../prompts/tools/image-gen.md" with { type: "te
 import { AUTO_IMAGE_PROVIDER_ORDER, type ImageProvider, isImageProviderId } from "./image-providers";
 import { resolveReadPath } from "./path-utils";
 
-const DEFAULT_OPENROUTER_MODEL = "google/gemini-3-pro-image-preview";
-const DEFAULT_ANTIGRAVITY_MODEL = "gemini-3-pro-image";
-const DEFAULT_XAI_IMAGE_MODEL = "grok-imagine-image";
-const DEFAULT_DEEPINFRA_IMAGE_MODEL = "black-forest-labs/FLUX-2-pro";
 const DEEPINFRA_IMAGES_URL = "https://api.deepinfra.com/v1/openai/images/generations";
 const IMAGE_TIMEOUT = 3 * 60 * 1000; // 3 minutes
 const MAX_IMAGE_SIZE = 35 * 1024 * 1024;
@@ -663,8 +659,8 @@ interface AntigravityImageTarget {
  * behind `bearer`, memoized per bearer. `withAuth` can rotate to a sibling
  * account mid-request; each account carries its own image roster, so the target
  * MUST be resolved for the credential actually in hand, not the initial one.
- * Falls back to {@link DEFAULT_ANTIGRAVITY_MODEL} and the default endpoint order
- * when discovery is unavailable.
+ * Falls back to the `antigravity-image` hosted default and the default
+ * endpoint order when discovery is unavailable.
  */
 async function resolveAntigravityImageTarget(
 	bearer: string,
@@ -690,7 +686,7 @@ async function resolveAntigravityImageTarget(
 				// fallbacks so generation retries (429/5xx/network) still fail over.
 				endpoints: [advertised.endpoint, ...endpoints.filter(endpoint => endpoint !== advertised.endpoint)],
 			}
-		: { model: DEFAULT_ANTIGRAVITY_MODEL, endpoints };
+		: { model: resolveHostedImageModel("antigravity"), endpoints };
 	cache.set(bearer, target);
 	return target;
 }
@@ -1366,23 +1362,13 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 
 				const provider = apiKey.provider;
 				try {
-					let model: string;
-					if (provider === "openai" || provider === "openai-codex") {
-						model = apiKey.model?.id ?? "gpt";
-					} else if (provider === "antigravity") {
-						// The real model is resolved per credential inside withAuth (a
-						// rotated sibling account may advertise a different roster); this
-						// seed only hints credential resolution and the fallback path.
-						model = DEFAULT_ANTIGRAVITY_MODEL;
-					} else if (provider === "openrouter") {
-						model = DEFAULT_OPENROUTER_MODEL;
-					} else if (provider === "xai") {
-						model = DEFAULT_XAI_IMAGE_MODEL;
-					} else if (provider === "deepinfra") {
-						model = DEFAULT_DEEPINFRA_IMAGE_MODEL;
-					} else {
-						model = resolveHostedImageModel(provider);
-					}
+					// Credential-listed backends run on the session's model; every
+					// other backend resolves its `<backend>-image` hosted default.
+					// The antigravity seed only hints credential resolution: the
+					// real target is resolved per credential inside withAuth.
+					const model = isCredentialImageModel(provider)
+						? (apiKey.model?.id ?? "gpt")
+						: resolveHostedImageModel(provider);
 					const resolvedModel = provider === "openrouter" ? resolveOpenRouterModel(model) : model;
 					if (
 						params.aspect_ratio &&

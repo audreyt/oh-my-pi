@@ -284,6 +284,7 @@ behavior {
     }
     hosted-default provider="zai-search" model="glm-4.7"
     image-provider provider="openai-codex" backend="openai"
+    credential-image-models "openai" "openai-codex"
     api-routes provider="cloudflare-ai-gateway" {
         route "anthropic-messages" prefix="anthropic/" strip-prefix=#true
         route "openai-completions" prefix="openai/" strip-prefix=#true
