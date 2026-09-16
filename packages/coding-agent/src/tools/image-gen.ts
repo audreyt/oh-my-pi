@@ -22,7 +22,7 @@ import {
 	OPENAI_HEADERS,
 	URL_PATHS,
 } from "@oh-my-pi/pi-catalog/wire/codex";
-import { hostedDefaultModel } from "@oh-my-pi/pi-catalog/compat/behavior";
+import { hostedDefaultModel, imageProviderFor } from "@oh-my-pi/pi-catalog/compat/behavior";
 import { META_MODEL_API_BASE_URL } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
 import {
@@ -44,7 +44,6 @@ import imageGenDescription from "../prompts/tools/image-gen.md" with { type: "te
 import { AUTO_IMAGE_PROVIDER_ORDER, type ImageProvider, isImageProviderId } from "./image-providers";
 import { resolveReadPath } from "./path-utils";
 
-const DEFAULT_MODEL = "gemini-3-pro-image-preview";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-3-pro-image-preview";
 const DEFAULT_ANTIGRAVITY_MODEL = "gemini-3-pro-image";
 const DEFAULT_XAI_IMAGE_MODEL = "grok-imagine-image";
@@ -740,10 +739,10 @@ async function findMetaImageCredentials(
 	if (apiKey) return { provider: "meta", apiKey };
 	return null;
 }
-function resolveMetaImageModel(): string {
-	const defaultModel = hostedDefaultModel("meta-image");
+function resolveHostedImageModel(provider: ImageProvider): string {
+	const defaultModel = hostedDefaultModel(`${provider}-image`);
 	if (defaultModel) return defaultModel;
-	throw new Error("Missing default model policy for Meta image generation");
+	throw new Error(`Missing hosted-default policy for ${provider}-image`);
 }
 
 function resolveMetaImageBaseUrl(modelRegistry?: ModelRegistry): string {
@@ -829,26 +828,9 @@ async function findCodexSubscriptionImageCredentials(
 }
 
 function activeImageProvider(model: Model | undefined): Exclude<ImageProviderPreference, "auto"> | null {
-	switch (model?.provider) {
-		case "openai":
-		case "openai-codex":
-			return "openai";
-		case "google-antigravity":
-			return "antigravity";
-		case "xai":
-		case "xai-oauth":
-			return "xai";
-		case "openrouter":
-			return "openrouter";
-		case "deepinfra":
-			return "deepinfra";
-		case "meta":
-			return "meta";
-		case "google":
-			return "gemini";
-		default:
-			return null;
-	}
+	if (!model?.provider) return null;
+	const backend = imageProviderFor(model.provider);
+	return isImageProviderId(backend) ? backend : null;
 }
 
 function imageProviderOrder(activeModel: Model | undefined, requested?: ImageProviderPreference): ImageProvider[] {
@@ -1382,10 +1364,8 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 						model = DEFAULT_XAI_IMAGE_MODEL;
 					} else if (provider === "deepinfra") {
 						model = DEFAULT_DEEPINFRA_IMAGE_MODEL;
-					} else if (provider === "meta") {
-						model = resolveMetaImageModel();
 					} else {
-						model = DEFAULT_MODEL;
+						model = resolveHostedImageModel(provider);
 					}
 					const resolvedModel = provider === "openrouter" ? resolveOpenRouterModel(model) : model;
 					if (

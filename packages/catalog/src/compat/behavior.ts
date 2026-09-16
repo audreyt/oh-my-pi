@@ -118,6 +118,14 @@ export function hostedDefaultModel(provider: string): string | undefined {
 	return behavior.hostedDefaults.find(entry => entry.provider === provider)?.model;
 }
 
+/**
+ * The generate_image backend for an active chat provider, if declared.
+ * Unlisted providers do not bias auto order.
+ */
+export function imageProviderFor(provider: string): string | undefined {
+	return behavior.imageProviders.find(entry => entry.provider === provider)?.backend;
+}
+
 /** One resolved API route for a provider model id. */
 export interface ApiRouteMatch {
 	/** Transport API the id rides. */
