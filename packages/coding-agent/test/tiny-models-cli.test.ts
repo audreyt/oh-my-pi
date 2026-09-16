@@ -27,7 +27,10 @@ describe("tiny-models download model resolution", () => {
 	});
 
 	it("includes ONNX-blocked models in `all` when the MLX backend is active", () => {
-		expect(resolveModels("all", true)).toEqual(TINY_LOCAL_MODELS.map(spec => spec.key));
+		// afm-core stays out: the SystemLanguageModel engine has neither an
+		// ONNX nor an MLX export to prefetch.
+		const expected = TINY_LOCAL_MODELS.filter(spec => !isFoundationModelsSpec(spec)).map(spec => spec.key);
+		expect(resolveModels("all", true)).toEqual(expected);
 	});
 
 	it("still resolves an explicitly requested unsupported model (only `all` is filtered)", () => {
