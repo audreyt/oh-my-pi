@@ -185,4 +185,10 @@ describe("coerceServiceTierByFamily", () => {
 		});
 		expect(coerceServiceTierByFamily({ openai: "bogus" })).toBeUndefined();
 	});
+
+	it("preserves the none omit sentinel in a per-family map", () => {
+		expect(coerceServiceTierByFamily({ openai: "none", anthropic: "bogus" })).toEqual({
+			openai: "none",
+		});
+	});
 });
