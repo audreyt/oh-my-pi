@@ -12,7 +12,7 @@ export interface TinyTitleLocalModelSpec {
 	/** ONNX export loaded by transformers.js on every platform. */
 	repo: string;
 	dtype: "q4";
-	/** Pre-quantized MLX export loaded by mlx-lm when `PI_TINY_DEVICE=mlx`. Absent for non-MLX engines. */
+	/** Pre-quantized MLX export loaded by mlx-lm when `PI_TINY_DEVICE=mlx`. Absent for non-weight engines (Apple Foundation Models). */
 	mlxRepo?: string;
 	label: string;
 	description: string;
@@ -67,7 +67,6 @@ export const TINY_TITLE_LOCAL_MODELS = [
 		onnxUnsupportedReason: "Apple Foundation Models uses the SystemLanguageModel engine, not ONNX",
 	},
 ] as const satisfies readonly TinyTitleLocalModelSpec[];
-
 export const TINY_TITLE_MODEL_VALUES = [
 	ONLINE_TINY_TITLE_MODEL_KEY,
 	"lfm2.5-230m",

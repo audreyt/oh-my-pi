@@ -20,7 +20,6 @@ import titleSystemPrompt from "../prompts/system/title-system.md" with { type: "
 import {
 	AFM_CORE_SIDECAR_ENV,
 	completeAfmCore,
-	type AfmStatus,
 	foundationModelsUnavailableReason,
 	isAfmModelNotReady,
 	isAfmRequestScopedFailure,
@@ -46,6 +45,7 @@ import {
 	isTinyMemoryLocalModelKey,
 	isTinyTitleLocalModelKey,
 	type TinyLocalModelKey,
+	type TinyTitleLocalModelKey,
 	type TinyTitleLocalModelSpec,
 } from "./models";
 import { normalizeGeneratedTitle } from "./text";
@@ -601,6 +601,7 @@ export class TinyTitleClient {
 	 */
 	prewarm(modelKey: string): void {
 		if (!isTinyTitleLocalModelKey(modelKey) || this.#failedModels.has(modelKey)) return;
+		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey))) return;
 		try {
 			this.#ensureWorker(modelKey).handle.send({ type: "ping", id: String(++this.#nextRequestId) });
 		} catch (error) {
@@ -620,7 +621,11 @@ export class TinyTitleClient {
 	): Promise<string | null> {
 		const options = normalizeTinyTitleGenerateOptions(optionsOrSignal);
 		if (!isTinyTitleLocalModelKey(modelKey)) return null;
-		if (options.signal?.aborted || this.#failedModels.has(modelKey)) return null;
+		if (options.signal?.aborted) return null;
+		if (this.#failedModels.has(modelKey)) {
+			this.#emitProgress({ modelKey, status: "error", name: getTinyTitleModelSpec(modelKey).repo });
+			return null;
+		}
 		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey)))
 			return this.#generateFoundationModels(modelKey, message, options.systemPrompt, options.signal);
 		const { promise, resolve } = Promise.withResolvers<string | null>();
@@ -661,9 +666,14 @@ export class TinyTitleClient {
 		if (!isTinyLocalModelKey(modelKey)) return { ok: false };
 		if (options.signal?.aborted) return { ok: false };
 		const unsubscribe = options.onProgress ? this.onProgress(options.onProgress) : undefined;
+		const downloadSpec = getTinyLocalModelSpec(modelKey);
+		if (downloadSpec && isFoundationModelsSpec(downloadSpec))
+			try {
+				return await this.#probeFoundationModels(modelKey, downloadSpec, options.signal);
+			} finally {
+				unsubscribe?.();
+			}
 		try {
-			const spec = getTinyLocalModelSpec(modelKey);
-			if (isFoundationModelsSpec(spec)) return this.#probeFoundationModels(modelKey, spec);
 			const { promise, resolve } = Promise.withResolvers<TinyTitleDownloadResult>();
 			const request: TinyWorkerRequest = { type: "load", id: String(++this.#nextRequestId) };
 			return await this.#run(request, { kind: "load", modelKey, resolve }, promise, options.signal, () =>
@@ -802,13 +812,12 @@ export class TinyTitleClient {
 	 * failures disable AFM until restart.
 	 */
 	async #generateFoundationModels(
-		modelKey: TinyLocalModelKey,
+		modelKey: TinyTitleLocalModelKey,
 		message: string,
 		systemPrompt?: string,
 		signal?: AbortSignal,
 	): Promise<string | null> {
-		const spec = getTinyLocalModelSpec(modelKey);
-		if (!spec) return null;
+		const spec = getTinyTitleModelSpec(modelKey);
 		const blocked = foundationModelsUnavailableReason(spec);
 		if (blocked) {
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
@@ -817,25 +826,20 @@ export class TinyTitleClient {
 		}
 		if (signal?.aborted) return null;
 		this.#emitProgress({ modelKey, status: "initiate", name: spec.repo });
-		const abort = Promise.withResolvers<{ kind: "aborted" }>();
-		const onAbort = () => abort.resolve({ kind: "aborted" });
-		if (signal) signal.addEventListener("abort", onAbort, { once: true });
 		try {
-			const completion = completeAfmCore({
+			const text = await completeAfmCore({
 				instructions: systemPrompt?.trim() || TINY_TITLE_SYSTEM_PROMPT,
 				prompt: formatTitleUserMessage(message),
-			}).then(
-				text => ({ kind: "done", text }) as const,
-				error => ({ kind: "failed", error }) as const,
-			);
-			const outcome = signal ? await Promise.race([completion, abort.promise]) : await completion;
-			if (outcome.kind === "aborted") return null;
-			if (outcome.kind === "done") {
-				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
-				return extractTinyTitle(outcome.text, message);
-			}
-			throw outcome.error;
+				maxTokens: TITLE_MAX_NEW_TOKENS,
+				signal,
+			});
+			this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+			return extractTinyTitle(text, message);
 		} catch (error) {
+			if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+				return null;
+			}
 			if (isAfmModelNotReady(error)) {
 				this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 				return null;
@@ -847,8 +851,6 @@ export class TinyTitleClient {
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 			this.#failedModels.add(modelKey);
 			return null;
-		} finally {
-			signal?.removeEventListener("abort", onAbort);
 		}
 	}
 
@@ -859,24 +861,29 @@ export class TinyTitleClient {
 	async #probeFoundationModels(
 		modelKey: TinyLocalModelKey,
 		spec: TinyTitleLocalModelSpec,
+		signal?: AbortSignal,
 	): Promise<TinyTitleDownloadResult> {
 		const blocked = foundationModelsUnavailableReason(spec);
 		if (blocked) return { ok: false, error: `${modelKey} is unavailable: ${blocked}` };
+		if (signal?.aborted) return { ok: false };
 		this.#emitProgress({ modelKey, status: "initiate", name: spec.repo });
-		let status: AfmStatus;
 		try {
-			status = await probeAfmCore();
+			const status = await probeAfmCore(signal);
+			if (!status.available) {
+				this.#emitProgress({ modelKey, status: "error", name: spec.repo });
+				return { ok: false, error: status.reason ?? "Apple Foundation Model unavailable" };
+			}
+			this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+			return { ok: true };
 		} catch (error) {
+			if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+				return { ok: false };
+			}
 			const message = error instanceof Error ? error.message : String(error);
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
 			return { ok: false, error: message };
 		}
-		if (!status.available) {
-			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
-			return { ok: false, error: status.reason ?? "Apple Foundation Model unavailable" };
-		}
-		this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
-		return { ok: true };
 	}
 
 	#fail(pending: PendingRequest, error: string | undefined): void {

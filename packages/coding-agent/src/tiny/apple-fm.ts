@@ -1,8 +1,9 @@
+import type { TinyTitleLocalModelSpec } from "./models";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils";
-import { withFileLock } from "@oh-my-pi/pi-utils/file-lock";
-import type { TinyTitleLocalModelSpec } from "./models";
+import { LockAcquireError, withFileLock } from "@oh-my-pi/pi-utils/file-lock";
 import bundledArm64Identity from "./apple-fm/prebuilt/arm64-apple-macosx26.0/digest.txt" with { type: "text" };
 import bundledArm64Sidecar from "./apple-fm/prebuilt/arm64-apple-macosx26.0/omp-apple-fm" with { type: "file" };
 import sidecarSource from "./apple-fm/sidecar.swift" with { type: "text" };
@@ -32,7 +33,68 @@ function sidecarOverride(): string | undefined {
 /** Env override disables the platform gate so tests can drive a fake sidecar anywhere. */
 export function foundationModelsUnavailableReason(spec: TinyTitleLocalModelSpec): string | undefined {
 	if (sidecarOverride()) return undefined;
-	return spec.unsupportedReason;
+	if (spec.unsupportedReason) return spec.unsupportedReason;
+	// Darwin 25 == macOS 26, when FoundationModels shipped. A 26.0-target
+	// sidecar cannot launch on older kernels, so the Swift `#available` guard
+	// never runs; refuse before install/spawn.
+	if (!darwinMeetsAfmRuntime()) return "unsupported_os";
+	return undefined;
+}
+
+/** Darwin 25 is macOS 26 (FoundationModels). Keep in sync with swiftTargetTriple. */
+function darwinMeetsAfmRuntime(platform: NodeJS.Platform = process.platform, release: string = os.release()): boolean {
+	if (platform !== "darwin") return false;
+	const major = Number.parseInt(release.split(".")[0] ?? "", 10);
+	return Number.isFinite(major) && major >= 25;
+}
+
+function abortError(signal?: AbortSignal): Error {
+	return signal?.reason instanceof Error
+		? signal.reason
+		: new DOMException("The operation was aborted.", "AbortError");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+	if (signal?.aborted) throw abortError(signal);
+}
+
+async function settleSpawn(
+	proc: { kill: (signal?: NodeJS.Signals) => void; exited: Promise<number>; stdout: unknown; stderr: unknown },
+	signal?: AbortSignal,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	const stdoutP = new Response(proc.stdout as ReadableStream<Uint8Array>).text();
+	const stderrP = new Response(proc.stderr as ReadableStream<Uint8Array>).text();
+	if (!signal) {
+		const [stdout, stderr, exitCode] = await Promise.all([stdoutP, stderrP, proc.exited]);
+		return { stdout, stderr, exitCode };
+	}
+	const { promise: aborted, resolve } = Promise.withResolvers<void>();
+	const onAbort = (): void => resolve();
+	if (signal.aborted) resolve();
+	else signal.addEventListener("abort", onAbort, { once: true });
+	try {
+		const winner = await Promise.race([
+			Promise.all([stdoutP, stderrP, proc.exited]).then(([stdout, stderr, exitCode]) => ({
+				kind: "done" as const,
+				stdout,
+				stderr,
+				exitCode,
+			})),
+			aborted.then(() => ({ kind: "aborted" as const })),
+		]);
+		if (winner.kind === "aborted") {
+			try {
+				proc.kill("SIGKILL");
+			} catch {
+				// already exited
+			}
+			await proc.exited;
+			throw abortError(signal);
+		}
+		return { stdout: winner.stdout, stderr: winner.stderr, exitCode: winner.exitCode };
+	} finally {
+		signal.removeEventListener("abort", onAbort);
+	}
 }
 
 export function isAfmModelNotReady(error: unknown): boolean {
@@ -40,15 +102,24 @@ export function isAfmModelNotReady(error: unknown): boolean {
 	return /\bmodelNotReady\b/.test(text);
 }
 
-/** Prompt/guardrail failures must not disable AFM for later titles. */
-const AFM_TERMINAL_AVAILABILITY = /\b(deviceNotEligible|appleIntelligenceNotEnabled|unsupported_os|unavailable)\b/;
+/** Only explicit permanent availability reports disable AFM for later titles. */
+const AFM_TERMINAL_AVAILABILITY: Record<string, true> = {
+	deviceNotEligible: true,
+	appleIntelligenceNotEnabled: true,
+	unsupported_os: true,
+	unavailable: true,
+};
 
 export function isAfmRequestScopedFailure(error: unknown): boolean {
 	const text = error instanceof Error ? error.message : String(error);
-	if (isAfmModelNotReady(error)) return true;
-	if (/Apple Foundation Models sidecar returned empty text/.test(text)) return true;
-	if (!/\bapple_fm_failed\b/.test(text)) return false;
-	return !AFM_TERMINAL_AVAILABILITY.test(text);
+	const prefix = "apple_fm_failed: ";
+	const reason = text.startsWith(prefix) ? text.slice(prefix.length) : text;
+	return AFM_TERMINAL_AVAILABILITY[reason] !== true;
+}
+
+function mapSidecarInstallError(error: unknown): unknown {
+	if (error instanceof LockAcquireError) return new Error("apple_fm_busy: sidecar install lock");
+	return error;
 }
 
 function sidecarCacheDir(): string {
@@ -89,21 +160,18 @@ async function publishSidecar(srcPath: string, destPath: string): Promise<void> 
 	}
 	await Bun.write(tmpPath, bytes);
 	await fs.promises.chmod(tmpPath, 0o755);
-	fs.renameSync(tmpPath, destPath);
+	await fs.promises.rename(tmpPath, destPath);
 }
 
-async function compileSidecar(srcPath: string, binPath: string): Promise<void> {
+async function compileSidecar(srcPath: string, binPath: string, signal?: AbortSignal): Promise<void> {
+	throwIfAborted(signal);
 	const target = swiftTargetTriple();
 	const proc = Bun.spawn({
 		cmd: ["xcrun", "--sdk", "macosx", "swiftc", "-O", "-parse-as-library", "-target", target, "-o", binPath, srcPath],
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const [, stderr, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
+	const { stderr, exitCode } = await settleSpawn(proc, signal);
 	if (exitCode !== 0) {
 		const detail = stderr.trim();
 		throw new Error(
@@ -115,13 +183,59 @@ async function compileSidecar(srcPath: string, binPath: string): Promise<void> {
 	await fs.promises.chmod(binPath, 0o755);
 }
 
+/** Locked cache install. Published helper is named for cacheIdentity. */
+async function installAfmSidecar(
+	dir: string,
+	signal?: AbortSignal,
+	resolveBundledSidecar: () => Promise<string | undefined> = bundledSidecarPath,
+	identity: string = cacheIdentity(),
+): Promise<string> {
+	await fs.promises.mkdir(dir, { recursive: true });
+	const srcPath = path.join(dir, `sidecar-${identity}.swift`);
+	const binPath = path.join(dir, `omp-apple-fm-${identity}`);
+
+	return await withFileLock(
+		binPath,
+		async () => {
+			throwIfAborted(signal);
+			if (await Bun.file(binPath).exists()) return binPath;
+			throwIfAborted(signal);
+			const bundled = await resolveBundledSidecar();
+			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${identity}.tmp`);
+			try {
+				if (bundled) {
+					await publishSidecar(bundled, binPath);
+				} else {
+					await Bun.write(srcPath, sidecarSource);
+					await compileSidecar(srcPath, tmpPath, signal);
+					await fs.promises.rename(tmpPath, binPath);
+				}
+			} catch (error) {
+				await fs.promises.rm(tmpPath, { force: true });
+				await fs.promises.rm(srcPath, { force: true });
+				await fs.promises.rm(`${binPath}.${process.pid}.copy`, { force: true });
+				if (!bundled) {
+					throw new Error(
+						`${error instanceof Error ? error.message : String(error)}. afm-core needs the bundled Apple Silicon sidecar or Xcode/CLT to compile one.`,
+					);
+				}
+				throw error;
+			}
+			return binPath;
+		},
+		{ retries: 120, retryDelayMs: 250, signal },
+	);
+}
+
 /**
  * Resolve a runnable sidecar. Env override wins (tests / prebuilt). Otherwise
  * compile the bundled Swift into the tiny-models cache on first use.
- * Compile is locked and published by rename so two omp processes cannot
- * stamp a half-linked binary.
+ * Compile is locked and published by rename onto an identity-specific path
+ * so two omp processes cannot publish a half-linked binary, and a later
+ * install for a different identity cannot overwrite a path already returned.
  */
-export async function ensureAfmSidecar(): Promise<string> {
+export async function ensureAfmSidecar(signal?: AbortSignal): Promise<string> {
+	throwIfAborted(signal);
 	const override = sidecarOverride();
 	if (override) {
 		if (!(await Bun.file(override).exists())) {
@@ -132,67 +246,28 @@ export async function ensureAfmSidecar(): Promise<string> {
 	if (process.platform !== "darwin") {
 		throw new Error("Apple Foundation Models is macOS-only");
 	}
+	if (!darwinMeetsAfmRuntime()) {
+		throw new Error("unsupported_os");
+	}
 
-	const dir = sidecarCacheDir();
-	await fs.promises.mkdir(dir, { recursive: true });
-	const hash = cacheIdentity();
-	const srcPath = path.join(dir, "sidecar.swift");
-	const binPath = path.join(dir, "omp-apple-fm");
-	const stampPath = path.join(dir, `omp-apple-fm.${hash}`);
-	if ((await Bun.file(binPath).exists()) && (await Bun.file(stampPath).exists())) return binPath;
-
-	return await withFileLock(
-		binPath,
-		async () => {
-			if ((await Bun.file(binPath).exists()) && (await Bun.file(stampPath).exists())) return binPath;
-			const bundled = await bundledSidecarPath();
-			const tmpPath = path.join(dir, `omp-apple-fm.${process.pid}.${hash}.tmp`);
-			try {
-				if (bundled) {
-					await publishSidecar(bundled, binPath);
-				} else {
-					await Bun.write(srcPath, sidecarSource);
-					await compileSidecar(srcPath, tmpPath);
-					fs.renameSync(tmpPath, binPath);
-				}
-			} catch (error) {
-				await fs.promises.rm(tmpPath, { force: true });
-				if (!bundled) {
-					throw new Error(
-						`${error instanceof Error ? error.message : String(error)}. afm-core needs the bundled Apple Silicon sidecar or Xcode/CLT to compile one.`,
-					);
-				}
-				throw error;
-			}
-			try {
-				for await (const entry of new Bun.Glob("omp-apple-fm.*").scan({ cwd: dir, onlyFiles: true })) {
-					if (entry !== `omp-apple-fm.${hash}` && !entry.endsWith(".tmp") && !entry.endsWith(".lock")) {
-						await fs.promises.rm(path.join(dir, entry), { force: true });
-					}
-				}
-			} catch {
-				// Cache cleanup is best-effort.
-			}
-			await Bun.write(stampPath, `${hash}\n`);
-			return binPath;
-		},
-		{ retries: 120, retryDelayMs: 250 },
-	);
+	try {
+		return await installAfmSidecar(sidecarCacheDir(), signal);
+	} catch (error) {
+		throw mapSidecarInstallError(error);
+	}
 }
 
-async function runSidecar(args: string[], stdin?: string): Promise<SidecarPayload> {
-	const bin = await ensureAfmSidecar();
+async function runSidecar(args: string[], stdin?: string, signal?: AbortSignal): Promise<SidecarPayload> {
+	throwIfAborted(signal);
+	const bin = await ensureAfmSidecar(signal);
+	throwIfAborted(signal);
 	const proc = Bun.spawn({
 		cmd: [bin, ...args],
 		stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const [stdout, stderr, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
+	const { stdout, stderr, exitCode } = await settleSpawn(proc, signal);
 	const line = stdout
 		.split(/\r?\n/)
 		.map(entry => entry.trim())
@@ -216,8 +291,8 @@ async function runSidecar(args: string[], stdin?: string): Promise<SidecarPayloa
 	return payload;
 }
 
-export async function probeAfmCore(): Promise<AfmStatus> {
-	const payload = await runSidecar(["status"]);
+export async function probeAfmCore(signal?: AbortSignal): Promise<AfmStatus> {
+	const payload = await runSidecar(["status"], undefined, signal);
 	return {
 		available: payload.available === true,
 		reason: payload.reason,
@@ -229,6 +304,7 @@ export async function completeAfmCore(input: {
 	instructions?: string;
 	prompt: string;
 	maxTokens?: number;
+	signal?: AbortSignal;
 }): Promise<string> {
 	const payload = await runSidecar(
 		["complete"],
@@ -237,8 +313,17 @@ export async function completeAfmCore(input: {
 			prompt: input.prompt,
 			...(input.maxTokens !== undefined ? { maxTokens: input.maxTokens } : {}),
 		}),
+		input.signal,
 	);
 	const text = payload.text?.trim() ?? "";
 	if (!text) throw new Error("Apple Foundation Models sidecar returned empty text");
 	return text;
 }
+
+/** Test-only. Not part of the supported module API. */
+export const __internalsForTesting = {
+	darwinMeetsAfmRuntime,
+	mapSidecarInstallError,
+	cacheIdentity,
+	installAfmSidecar,
+};
