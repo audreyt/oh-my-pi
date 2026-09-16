@@ -448,6 +448,14 @@ export class MemoryProtocolHandler implements ProtocolHandler {
 			if (hindsightActive) {
 				throw new Error(HINDSIGHT_UNADDRESSABLE);
 			}
+			if (mnemopiStates.length === 0) {
+				throw unknownNamespaceError(namespace);
+			}
+			const hit = tryResolveMnemopiMemory(namespace);
+			if (hit) return renderMnemopiMemory(url, hit);
+			throw new Error(
+				`Mnemopi memory ${namespace} not found in any scoped bank. Use \`recall\` to list available ids.`,
+			);
 		}
 
 		// A project may retain files from an earlier local session. Reject known
