@@ -39,6 +39,12 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	"meta-image",
 	// Hosted image-generation default for the Gemini backend (same tool)
 	"gemini-image",
+	// Hosted image-generation defaults for the remaining generate_image
+	// backends (same tool; resolved via hostedDefaultModel)
+	"antigravity-image",
+	"openrouter-image",
+	"xai-image",
+	"deepinfra-image",
 ]);
 
 function collectReferencedProviders(): Map<string, string> {
@@ -119,14 +125,16 @@ describe("compat rules conformance", () => {
 		expect(offenders).toEqual([]);
 	});
 
-	test("every image-provider backend has a hosted default or its own model", () => {
-		// generate_image resolves model-less backends via hostedDefaultModel(`${backend}-image`)
-		// and throws without one; credential-driven backends carry their own model instead.
-		const credentialDriven = new Set(["openai", "antigravity", "xai", "openrouter", "deepinfra"]);
+	test("every image-provider backend has a hosted default or credential model", () => {
+		// generate_image resolves credential-listed backends from the active
+		// credential and every other backend via hostedDefaultModel(`${backend}-image`),
+		// which throws without one. Both halves come from the KDL policy, so a
+		// new backend cannot be blessed without declaring its model source.
+		const credential = new Set(rules.behavior.credentialImageModels);
 		const defaults = new Set(rules.behavior.hostedDefaults.map(entry => entry.provider));
 		const offenders: string[] = [];
 		for (const entry of rules.behavior.imageProviders) {
-			if (!credentialDriven.has(entry.backend) && !defaults.has(`${entry.backend}-image`)) {
+			if (!credential.has(entry.backend) && !defaults.has(`${entry.backend}-image`)) {
 				offenders.push(entry.backend);
 			}
 		}

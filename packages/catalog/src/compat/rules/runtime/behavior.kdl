@@ -284,6 +284,16 @@ behavior {
 	// than misroute a foreign default.
 	hosted-default provider="gemini-image" model="gemini-3-pro-image-preview"
 	hosted-default provider="meta-image" model="muse-image-1.0"
+	hosted-default provider="antigravity-image" model="gemini-3-pro-image"
+	hosted-default provider="openrouter-image" model="google/gemini-3-pro-image-preview"
+	hosted-default provider="xai-image" model="grok-imagine-image"
+	hosted-default provider="deepinfra-image" model="black-forest-labs/FLUX-2-pro"
+	// Image backends whose generate_image model comes from the active
+	// credential instead of a hosted default: OpenAI hosted generation
+	// runs on the session's GPT model (or the Codex subscription model),
+	// so no static default can name it. Every other backend resolves via
+	// its `<backend>-image` hosted default above.
+	credential-image-models "openai" "openai-codex"
 	// Chat-provider → generate_image backend. Unlisted providers do not
 	// bias auto order. openai-codex maps onto the openai backend so a
 	// Codex session still prefers OPENAI_API_KEY, then the subscription.
