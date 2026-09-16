@@ -84,7 +84,7 @@ describe("Meta Model API provider", () => {
 		expect(byId.get("muse-spark-1.3-contributor")).toMatchObject({
 			name: "Muse Spark 1.3 (C)",
 			cost: { input: 0.1, output: 0.2, cacheRead: 0.002, cacheWrite: 0 },
-			thinking: MUSE_SPARK_1_3_THINKING,
+			thinking: MUSE_SPARK_THINKING,
 		});
 		// Image/voice SKUs on the same roster are not chat models.
 		expect(byId.has("muse-image-1.0")).toBe(false);
