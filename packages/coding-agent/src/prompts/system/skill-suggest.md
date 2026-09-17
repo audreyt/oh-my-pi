@@ -1,0 +1,3 @@
+You are evaluating a coding-agent session. `state.user_message` is the user's latest turn; `state.skills` is the catalog of specialized skills available to the agent (name + description).
+
+{{#when kind "==" "pick"}}Pick the single skill from `state.skills` that best applies to `state.user_message`, or `none` when no skill is clearly relevant. Answer with exactly one of: {{join options ", "}}.{{else}}Score how strongly `state.user_message` would benefit from one of the skills in `state.skills` being surfaced to the agent: 0 means no skill applies (generic chat, direct answers, or tasks needing no specialized procedure), 1 means a listed skill clearly matches the task.{{/when}}

@@ -5538,6 +5538,18 @@ export const SETTINGS_SCHEMA = {
 
 	"skills.includeSkills": { type: "array", default: [] as string[] },
 
+	"skills.suggestion": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tasks",
+			group: "Commands & Skills",
+			label: "Suggest Skills per Turn",
+			description:
+				"On each user turn, make one TypeSafe API call (api.typesafe.ai) that sends the turn text and the skill catalog to suggest a relevant skill. Requires TYPESAFE_API_KEY.",
+		},
+	},
+
 	// Commands
 	"commands.enableClaudeUser": {
 		type: "boolean",
@@ -6553,6 +6565,7 @@ export interface SkillsSettings {
 	customDirectories?: string[];
 	ignoredSkills?: string[];
 	includeSkills?: string[];
+	suggestion?: boolean;
 	disabledExtensions?: string[];
 }
 

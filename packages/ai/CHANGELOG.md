@@ -12,6 +12,7 @@
 - `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 - Added `TYPESAFE_API_KEY` to the legacy env-key map so `getEnvApiKey("typesafe")` resolves the TypeSafe System One credential.
 - Added the `typesafe` env-key mapping so `getEnvApiKey("typesafe")` resolves `TYPESAFE_API_KEY`.
+- Added `TYPESAFE_API_KEY` env-key mapping for the `typesafe` provider key used by `getEnvApiKey`.
 
 ## [18.2.2] - 2026-09-16
 

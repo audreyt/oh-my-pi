@@ -9,6 +9,10 @@
 
 - Added `typesafe` (TypeSafe System One / Jev) as a backend for `providers.autoThinkingModel` and `providers.unexpectedStopModel`, returning calibrated typed judgments instead of parsed text; requires `TYPESAFE_API_KEY`.
 
+### Added
+
+- Added opt-in `skills.suggestion` setting: when enabled and `TYPESAFE_API_KEY` is set, each user turn makes one TypeSafe API call that may inject a one-line skill suggestion into the turn context.
+
 ### Fixed
 
 - Reduced snapshot-recording stalls when a session retains large file histories. ([#12279](https://github.com/can1357/oh-my-pi/pull/12279) by [@iliaal](https://github.com/iliaal))

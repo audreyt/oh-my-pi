@@ -149,6 +149,7 @@ import { ManagedTimers } from "../extensibility/extensions/managed-timers";
 import { createExtensionModelQuery } from "../extensibility/extensions/model-api";
 import type { CompactOptions, ContextUsage } from "../extensibility/extensions/types";
 import type { HookCommandContext } from "../extensibility/hooks/types";
+import { suggestSkill } from "../extensibility/skill-suggest";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
 import { normalizeToolEventInput, resolveToolEventInput } from "../extensibility/tool-event-input";
@@ -181,6 +182,7 @@ import planModeToolDecisionReminderPrompt from "../prompts/system/plan-mode-tool
 import rewindReportTemplate from "../prompts/system/rewind-report.md" with { type: "text" };
 import sessionStopBlockedPrompt from "../prompts/system/session-stop-blocked.md" with { type: "text" };
 import sideChannelNoToolsReminder from "../prompts/system/side-channel-no-tools.md" with { type: "text" };
+import skillSuggestionPrompt from "../prompts/system/skill-suggestion.md" with { type: "text" };
 import skillfulNoticePrompt from "../prompts/system/skillful-notice.md" with { type: "text" };
 import vibeModeActivePrompt from "../prompts/system/vibe-mode-active.md" with { type: "text" };
 import videoAttachmentPrompt from "../prompts/system/video-attachment.md" with { type: "text" };
@@ -227,6 +229,7 @@ import {
 import { supportsExternalThinking } from "../tools/think";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
+import { getTypeSafeApiKey } from "../typesafe/client";
 import type { WorkPoolYieldItem } from "../task/workpool-yield";
 import { parseCommandArgs } from "../utils/command-args";
 import type { EditMode } from "../utils/edit-mode";
@@ -6877,6 +6880,18 @@ export class AgentSession {
 			}
 			this.#pendingNextTurnMessages = [];
 
+			// Auto thinking and skill suggestion both classify real user turns: a
+			// user-invoked `/skill:<name>` arrives as a user-attributed skill custom
+			// message whose expanded body is the task prompt, so it counts as a user
+			// turn. Synthetic/tool-continuation turns (developer roles) and
+			// agent-originated or autoloaded skill injections are skipped.
+			const isUserTurn = message.role === "user" || (message.role === "custom" && isUserInvokedSkillPrompt(message));
+			// Kick the TypeSafe suggestion request off now so it overlaps file-mention
+			// reads, agent-start preparation, and auto-thinking classification; the
+			// result is awaited just before the model call below. Resolves to
+			// undefined (never throws) when the feature is off or the call fails.
+			const skillSuggestionPromise = isUserTurn ? this.#suggestSkillForTurn(expandedText) : undefined;
+
 			// Auto-read @filepath mentions
 			const fileMentions = extractFileMentions(expandedText);
 			if (fileMentions.length > 0) {
@@ -6897,18 +6912,24 @@ export class AgentSession {
 			const baseXdevCatalogDelivered = preparation.baseXdevCatalogDelivered;
 
 			// Auto thinking: classify this real user turn and set the effective level
-			// before the model request. A user-invoked `/skill:<name>` arrives as a
-			// user-attributed skill custom message whose expanded body is the task
-			// prompt, so it counts as a user turn. Synthetic/tool-continuation turns
-			// (developer roles), agent-originated or autoloaded skill injections, and
-			// non-auto sessions are skipped. Never blocks the turn — failures fall
-			// back to a concrete level inside the helper.
-			const isUserTurn = message.role === "user" || (message.role === "custom" && isUserInvokedSkillPrompt(message));
+			// before the model request. Non-auto sessions are skipped. Never blocks
+			// the turn — failures fall back to a concrete level inside the helper.
 			if (this.isAutoThinking && isUserTurn) {
 				await this.#models.applyAutoThinkingLevel(expandedText, generation);
 				if (this.#promptGeneration !== generation) {
 					return false;
 				}
+			}
+
+			// Surface the skill suggestion (if any) as a hidden developer-role note
+			// appended after the user message — additive attention; the <skills>
+			// listing in the system prompt is untouched.
+			const skillSuggestionMessage = skillSuggestionPromise ? await skillSuggestionPromise : undefined;
+			if (skillSuggestionMessage) {
+				if (this.#promptGeneration !== generation) {
+					return false;
+				}
+				messages.push(skillSuggestionMessage);
 			}
 
 			// Only the xd:// mount notice can carry substantial inline docs (up to
@@ -8630,6 +8651,39 @@ export class AgentSession {
 			}
 		}
 		return enabled;
+	}
+
+	/**
+	 * Opt-in per-turn skill suggestion (`skills.suggestion`). Scores the turn
+	 * against the skill catalog with one TypeSafe request and returns a hidden
+	 * custom message naming the pick, or `undefined`. Never throws: the feature
+	 * off, no `TYPESAFE_API_KEY`, no tool able to read `skill://` URIs, or any
+	 * API failure all resolve to `undefined`.
+	 */
+	async #suggestSkillForTurn(turnText: string): Promise<CustomMessage | undefined> {
+		try {
+			if (this.settings.get("skills.suggestion") !== true) return undefined;
+			if (this.settings.get("skillful") !== true) return undefined;
+			const apiKey = getTypeSafeApiKey();
+			if (!apiKey) return undefined;
+			const hasSkillReader = this.getEnabledToolNames().some(name => toolReadsSkillUris(this.getToolByName(name)));
+			if (!hasSkillReader) return undefined;
+			const name = await suggestSkill(turnText, this.skills, { apiKey });
+			if (!name) return undefined;
+			return {
+				role: "custom",
+				customType: "skill-suggestion",
+				content: prompt.render(skillSuggestionPrompt, { name }),
+				display: false,
+				attribution: "agent",
+				timestamp: Date.now(),
+			};
+		} catch (error) {
+			logger.debug("skill-suggest: suggestion failed; skipping", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return undefined;
+		}
 	}
 
 	/** Lists thinking levels supported by the active model. */
