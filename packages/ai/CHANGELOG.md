@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `TYPESAFE_API_KEY` env-key mapping for the `typesafe` provider key used by `getEnvApiKey`.
+
 ## [18.2.2] - 2026-09-16
 
 ### Added
