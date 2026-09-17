@@ -5,10 +5,14 @@ import type { ModelRegistry } from "../config/model-registry";
 import { resolveRoleSelection } from "../config/model-resolver";
 import type { Settings } from "../config/settings";
 import unexpectedStopClassifierPrompt from "../prompts/system/unexpected-stop-classifier.md" with { type: "text" };
+import unexpectedStopTypeSafePrompt from "../prompts/system/unexpected-stop-typesafe.md" with { type: "text" };
 import { isTinyMemoryLocalModelKey, ONLINE_MEMORY_MODEL_KEY } from "../tiny/models";
 import { tinyModelClient } from "../tiny/title-client";
+import { evaluateTypeSafe, getTypeSafeApiKey, TYPESAFE_MODEL_KEY } from "../typesafe/client";
 
 const CLASSIFIER_SYSTEM_PROMPT = prompt.render(unexpectedStopClassifierPrompt);
+
+const TYPESAFE_INSTRUCTIONS = prompt.render(unexpectedStopTypeSafePrompt);
 
 /**
  * The answer is a single word. OpenAI-compatible endpoints reject values below
@@ -71,6 +75,9 @@ export async function classifyUnexpectedStop(
 		if (backend === ONLINE_MEMORY_MODEL_KEY) {
 			return await classifyOnline(text, deps);
 		}
+		if (backend === TYPESAFE_MODEL_KEY) {
+			return await classifyTypeSafe(text, deps);
+		}
 		if (isTinyMemoryLocalModelKey(backend)) {
 			return await classifyLocal(text, backend, deps);
 		}
@@ -126,6 +133,24 @@ async function classifyOnline(text: string, deps: ClassifyUnexpectedStopDeps): P
 		.map(part => part.text)
 		.join("\n");
 	return parseUnexpectedStopClassification(outputText);
+}
+
+/**
+ * TypeSafe (Jev) backend: one noul question over the assistant message text.
+ * `noul` is the calibrated probability the message is an unexpected stop.
+ */
+async function classifyTypeSafe(text: string, deps: ClassifyUnexpectedStopDeps): Promise<boolean | undefined> {
+	const apiKey = getTypeSafeApiKey();
+	if (!apiKey) {
+		throw new Error("unexpected-stop: no TYPESAFE_API_KEY for typesafe classification");
+	}
+	const result = await evaluateTypeSafe(
+		text,
+		{ unexpected_stop: { type: "noul", instructions: TYPESAFE_INSTRUCTIONS } },
+		{ apiKey, signal: deps.signal },
+	);
+	const noul = result.answers.unexpected_stop?.noul;
+	return typeof noul === "number" ? noul >= 0.5 : undefined;
 }
 
 async function classifyLocal(

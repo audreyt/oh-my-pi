@@ -31,6 +31,7 @@ import { collectOnlineTinyCandidates } from "../tiny/online-candidates";
 import type { Settings } from "../config/settings";
 import difficultySystemPrompt from "../prompts/system/auto-thinking-difficulty.md" with { type: "text" };
 import difficultyLocalPrompt from "../prompts/system/auto-thinking-difficulty-local.md" with { type: "text" };
+import difficultyTypeSafePrompt from "../prompts/system/auto-thinking-typesafe.md" with { type: "text" };
 import { clampAutoThinkingEffort } from "../thinking";
 import { preprocessTinyMessage } from "../tiny/message-preproc";
 import {
@@ -39,12 +40,14 @@ import {
 	ONLINE_AUTO_THINKING_MODEL_KEY,
 } from "../tiny/models";
 import { tinyModelClient } from "../tiny/title-client";
+import { evaluateTypeSafe, getTypeSafeApiKey, TYPESAFE_MODEL_KEY, type TypeSafeAnswer } from "../typesafe/client";
 
 /**
  * Rendered classifier prompts, keyed by whether `max` is offered as a label.
  * Two variants only, so both are memoized on first use.
  */
 const DIFFICULTY_SYSTEM_PROMPTS: Partial<Record<"max" | "xhigh", string>> = {};
+const TYPESAFE_INSTRUCTION_PROMPTS: Partial<Record<"max" | "xhigh", string>> = {};
 
 /**
  * Highest effort this turn's classification may resolve to: the configured
@@ -57,12 +60,16 @@ function autoEffortCeiling(deps: ClassifyDifficultyDeps): Effort {
 	return getSupportedEfforts(deps.model).includes(Effort.Max) ? Effort.Max : Effort.XHigh;
 }
 
-function difficultySystemPromptFor(ceiling: Effort): string {
+function difficultyPromptFor(
+	template: string,
+	cache: Partial<Record<"max" | "xhigh", string>>,
+	ceiling: Effort,
+): string {
 	const key = ceiling === Effort.Max ? "max" : "xhigh";
-	const cached = DIFFICULTY_SYSTEM_PROMPTS[key];
+	const cached = cache[key];
 	if (cached !== undefined) return cached;
-	const rendered = prompt.render(difficultySystemPrompt, { allowMax: key === "max" });
-	DIFFICULTY_SYSTEM_PROMPTS[key] = rendered;
+	const rendered = prompt.render(template, { allowMax: key === "max" });
+	cache[key] = rendered;
 	return rendered;
 }
 
@@ -120,11 +127,17 @@ export async function classifyDifficulty(
 	const backend = deps.settings.get("providers.autoThinkingModel");
 	const input = preprocessTinyMessage(promptText);
 	const online = backend === ONLINE_AUTO_THINKING_MODEL_KEY;
+	const typesafe = backend === TYPESAFE_MODEL_KEY;
 	// The 3-bucket local classifier cannot select `max`, so its ceiling stays at
 	// XHigh whatever the setting says — otherwise a sparse ladder would snap its
-	// `hard` bucket up to a tier it never chose.
-	const ceiling = online ? autoEffortCeiling(deps) : Effort.XHigh;
-	const effort = online ? await classifyOnline(input, deps, ceiling) : await classifyLocal(input, backend, deps);
+	// `hard` bucket up to a tier it never chose. TypeSafe answers the same level
+	// set as online, so it shares the online ceiling.
+	const ceiling = online || typesafe ? autoEffortCeiling(deps) : Effort.XHigh;
+	const effort = online
+		? await classifyOnline(input, deps, ceiling)
+		: typesafe
+			? await classifyTypeSafe(input, deps, ceiling)
+			: await classifyLocal(input, backend, deps);
 	// The ceiling goes into the clamp itself: capping the request alone is not
 	// enough, because a sparse ladder snaps an excluded request back up.
 	return clampAutoThinkingEffort(deps.model, effort, ceiling);
@@ -157,7 +170,7 @@ async function classifyOnline(input: string, deps: ClassifyDifficultyDeps, ceili
 					completeSimple(
 						model,
 						{
-							systemPrompt: [difficultySystemPromptFor(ceiling)],
+							systemPrompt: [difficultyPromptFor(difficultySystemPrompt, DIFFICULTY_SYSTEM_PROMPTS, ceiling)],
 							messages: [{ role: "user", content: input, timestamp: Date.now() }],
 						},
 						{
@@ -236,6 +249,62 @@ async function classifyLocal(input: string, modelKey: string, deps: ClassifyDiff
 		throw new Error(`auto-thinking: unparseable local classification: ${JSON.stringify(text)}`);
 	}
 	return effort;
+}
+
+/**
+ * TypeSafe (Jev) backend: one `choice` question over the same level set the
+ * online classifier is offered (`max` only when the ceiling allows it).
+ */
+async function classifyTypeSafe(input: string, deps: ClassifyDifficultyDeps, ceiling: Effort): Promise<Effort> {
+	const apiKey = getTypeSafeApiKey();
+	if (!apiKey) {
+		throw new Error("auto-thinking: no TYPESAFE_API_KEY for typesafe classification");
+	}
+	const levels = ["low", "medium", "high", "xhigh", ...(ceiling === Effort.Max ? ["max"] : [])];
+	const result = await evaluateTypeSafe(
+		input,
+		{
+			difficulty: {
+				type: "choice",
+				instructions: difficultyPromptFor(difficultyTypeSafePrompt, TYPESAFE_INSTRUCTION_PROMPTS, ceiling),
+				// Option rubric lives in the instructions; criteria keys declare the option set.
+				criteria: Object.fromEntries(levels.map(level => [level, null])),
+			},
+		},
+		{ apiKey, signal: deps.signal },
+	);
+	const answer = result.answers.difficulty;
+	const effort = answer ? effortFromTypeSafeAnswer(answer) : undefined;
+	if (!effort) {
+		throw new Error(`auto-thinking: unparseable typesafe classification: ${JSON.stringify(answer ?? null)}`);
+	}
+	return effort;
+}
+
+const TYPESAFE_LEVEL_EFFORTS: Record<string, Effort> = {
+	low: Effort.Low,
+	medium: Effort.Medium,
+	high: Effort.High,
+	xhigh: Effort.XHigh,
+	max: Effort.Max,
+};
+
+/**
+ * Map a TypeSafe choice answer to an {@link Effort}: argmax over
+ * `probabilities` (the `score` field's indexing convention is ambiguous),
+ * falling back to the declared `choice` when probabilities are absent.
+ */
+function effortFromTypeSafeAnswer(answer: TypeSafeAnswer): Effort | undefined {
+	const probabilities = answer.probabilities;
+	if (probabilities) {
+		let best: { level: string; probability: number } | undefined;
+		for (const [level, probability] of Object.entries(probabilities)) {
+			if (typeof probability !== "number") continue;
+			if (!best || probability > best.probability) best = { level, probability };
+		}
+		if (best) return TYPESAFE_LEVEL_EFFORTS[best.level.trim().toLowerCase()];
+	}
+	return answer.choice ? TYPESAFE_LEVEL_EFFORTS[answer.choice.trim().toLowerCase()] : undefined;
 }
 
 /**

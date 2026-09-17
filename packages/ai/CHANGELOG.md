@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `TYPESAFE_API_KEY` to the legacy env-key map so `getEnvApiKey("typesafe")` resolves the TypeSafe System One credential.
+
 ## [18.2.2] - 2026-09-16
 
 ### Added
