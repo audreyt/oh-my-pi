@@ -1,3 +1,5 @@
+import { TYPESAFE_MODEL_KEY } from "../typesafe/client";
+
 /** Default session-title model: the online @smol path (no local download / on-device inference). */
 export const ONLINE_TINY_TITLE_MODEL_KEY = "online";
 /** Local model the `tiny-models` CLI downloads when none is named. Not the session-title default — that is {@link ONLINE_TINY_TITLE_MODEL_KEY}. */
@@ -251,6 +253,43 @@ export function isTinyMemoryReasoningModelKey(key: TinyMemoryLocalModelKey): boo
 	return "reasoning" in spec && spec.reasoning === true;
 }
 
+/**
+ * Classifier-facing model set: the memory registry plus the TypeSafe (Jev)
+ * decision-only backend. Used by `providers.autoThinkingModel` and
+ * `providers.unexpectedStopModel` — NOT `providers.memoryModel`, which needs
+ * real text generation for fact extraction and consolidation.
+ */
+export const TINY_CLASSIFIER_MODEL_VALUES = [...TINY_MEMORY_MODEL_VALUES, TYPESAFE_MODEL_KEY] as const;
+
+export type TinyClassifierModelKey = (typeof TINY_CLASSIFIER_MODEL_VALUES)[number];
+
+type MissingTinyClassifierModelValue = Exclude<
+	typeof ONLINE_MEMORY_MODEL_KEY | typeof TYPESAFE_MODEL_KEY | TinyMemoryLocalModelKey,
+	TinyClassifierModelKey
+>;
+type ExtraTinyClassifierModelValue = Exclude<
+	TinyClassifierModelKey,
+	typeof ONLINE_MEMORY_MODEL_KEY | typeof TYPESAFE_MODEL_KEY | TinyMemoryLocalModelKey
+>;
+const TINY_CLASSIFIER_MODEL_VALUES_MATCH_REGISTRY: MissingTinyClassifierModelValue extends never
+	? ExtraTinyClassifierModelValue extends never
+		? true
+		: never
+	: never = true;
+void TINY_CLASSIFIER_MODEL_VALUES_MATCH_REGISTRY;
+
+const TYPESAFE_MODEL_OPTION = {
+	value: TYPESAFE_MODEL_KEY,
+	label: "TypeSafe (Jev)",
+	description:
+		"TypeSafe System One decision model: returns calibrated typed judgments instead of generated text. Requires TYPESAFE_API_KEY.",
+} as const;
+
+export const TINY_CLASSIFIER_MODEL_OPTIONS = [
+	...TINY_MEMORY_MODEL_OPTIONS,
+	TYPESAFE_MODEL_OPTION,
+] satisfies ReadonlyArray<{ value: TinyClassifierModelKey; label: string; description: string }>;
+
 /** Any local model key (title or memory), used by the shared inference worker. */
 export type TinyLocalModelKey = TinyTitleLocalModelKey | TinyMemoryLocalModelKey;
 
@@ -277,11 +316,11 @@ export const TINY_LOCAL_MODELS = [
  * online smol path; the local options reuse the memory-model registry because
  * the shared worker's `complete()` only accepts memory local keys, and the
  * 1B+ memory models classify coding difficulty far more reliably than the
- * sub-1B title models.
+ * sub-1B title models. `typesafe` selects the TypeSafe (Jev) decision backend.
  */
 export const ONLINE_AUTO_THINKING_MODEL_KEY = ONLINE_MEMORY_MODEL_KEY;
-export const AUTO_THINKING_MODEL_VALUES = TINY_MEMORY_MODEL_VALUES;
-export type AutoThinkingModelKey = TinyMemoryModelKey;
+export const AUTO_THINKING_MODEL_VALUES = TINY_CLASSIFIER_MODEL_VALUES;
+export type AutoThinkingModelKey = TinyClassifierModelKey;
 
 export const AUTO_THINKING_MODEL_OPTIONS = [
 	{
@@ -295,4 +334,5 @@ export const AUTO_THINKING_MODEL_OPTIONS = [
 		label: model.label,
 		description: model.description,
 	})),
+	TYPESAFE_MODEL_OPTION,
 ] satisfies ReadonlyArray<{ value: AutoThinkingModelKey; label: string; description: string }>;

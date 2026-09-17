@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `typesafe` (TypeSafe System One / Jev) as a backend for `providers.autoThinkingModel` and `providers.unexpectedStopModel`, returning calibrated typed judgments instead of parsed text; requires `TYPESAFE_API_KEY`.
+
 ### Fixed
 
 - Reduced snapshot-recording stalls when a session retains large file histories. ([#12279](https://github.com/can1357/oh-my-pi/pull/12279) by [@iliaal](https://github.com/iliaal))

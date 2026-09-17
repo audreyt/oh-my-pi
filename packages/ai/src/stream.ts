@@ -829,6 +829,7 @@ const LEGACY_ENV_KEYS: Record<string, KeyResolver> = {
 	jina: "JINA_API_KEY",
 	brave: "BRAVE_API_KEY",
 	tinyfish: "TINYFISH_API_KEY",
+	typesafe: "TYPESAFE_API_KEY",
 	firecrawl: "FIRECRAWL_API_KEY",
 };
 
