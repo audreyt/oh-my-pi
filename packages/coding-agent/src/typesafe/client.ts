@@ -1,19 +1,25 @@
 /**
- * Minimal client for TypeSafe System One (Jev) — a decision-only model that
- * returns typed judgments (noul/choice/score) instead of generated text.
- * Used by the generative classifiers as an alternative to prompt-and-parse.
- * No SDK: a single POST to the evaluation endpoint.
+ * Minimal TypeSafe (System One / Jev) API client.
+ *
+ * One POST to `https://api.typesafe.ai/v1/systemone` evaluates a caller-built
+ * `state` object against a map of typed questions (`noul` | `choice` |
+ * `score`) and returns the model's answers. No SDK dependency — plain fetch.
+ *
+ * Auth: `TYPESAFE_API_KEY` env var (see {@link getTypeSafeApiKey}), or an
+ * explicit `opts.apiKey`. Callers are expected to fail closed: any thrown
+ * error (missing key, non-2xx, malformed body, abort/timeout) means "no
+ * answer", never a turn-blocking failure.
  */
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { isRecord } from "@oh-my-pi/pi-utils";
 
-/** Settings value selecting the TypeSafe backend for classifier roles. */
+/** Env/registry key under which the TypeSafe credential resolves. */
 export const TYPESAFE_MODEL_KEY = "typesafe";
 
-const TYPESAFE_EVALUATE_URL = "https://api.typesafe.ai/v1/systemone";
-const TYPESAFE_DEFAULT_MODEL = "jev-latest";
-const TYPESAFE_DEFAULT_TIMEOUT_MS = 10_000;
-/** Error bodies can be large; keep thrown messages bounded. */
+const TYPESAFE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+const DEFAULT_MODEL = "jev-latest";
+const DEFAULT_TIMEOUT_MS = 10_000;
+/** Cap on the error body echoed into the thrown message. */
 const ERROR_BODY_MAX_CHARS = 500;
 
 export interface TypeSafeQuestion {
@@ -38,17 +44,18 @@ export interface TypeSafeEvaluateResult {
 	usage?: { input_tokens?: number; output_tokens?: number };
 }
 
-/** API key for the TypeSafe backend (`TYPESAFE_API_KEY`). */
+/** Resolves the TypeSafe API key from env (`TYPESAFE_API_KEY`). */
 export function getTypeSafeApiKey(): string | undefined {
-	return getEnvApiKey("typesafe");
+	return getEnvApiKey(TYPESAFE_MODEL_KEY);
 }
 
 /**
- * Evaluate `state` against a map of typed questions; answers come back under
- * the same question ids. Answers whose `type` does not match their question's
- * `type` are dropped rather than trusted.
+ * Evaluate `state` against `questions` in a single System One request.
  *
- * @throws on missing API key, non-2xx responses, or a malformed body.
+ * Throws on missing credentials, non-2xx responses (status + truncated body),
+ * and malformed payloads (missing `answers` map). Answers whose `type` does
+ * not match the corresponding question's `type` — or that name no asked
+ * question — are dropped from the result.
  */
 export async function evaluateTypeSafe(
 	state: unknown,
@@ -57,13 +64,12 @@ export async function evaluateTypeSafe(
 ): Promise<TypeSafeEvaluateResult> {
 	const apiKey = opts?.apiKey ?? getTypeSafeApiKey();
 	if (!apiKey) {
-		throw new Error("typesafe: no API key (set TYPESAFE_API_KEY)");
+		throw new Error("TypeSafe API key not configured (set TYPESAFE_API_KEY)");
 	}
-	const timeoutMs = opts?.timeoutMs ?? TYPESAFE_DEFAULT_TIMEOUT_MS;
-	const timeout = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
-	const signal = timeout ? (opts?.signal ? AbortSignal.any([opts.signal, timeout]) : timeout) : opts?.signal;
+	const timeoutSignal = AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+	const signal = opts?.signal ? AbortSignal.any([opts.signal, timeoutSignal]) : timeoutSignal;
 
-	const response = await fetch(TYPESAFE_EVALUATE_URL, {
+	const response = await fetch(TYPESAFE_ENDPOINT, {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${apiKey}`,
@@ -71,29 +77,52 @@ export async function evaluateTypeSafe(
 		},
 		body: JSON.stringify({
 			state,
-			model: opts?.model ?? TYPESAFE_DEFAULT_MODEL,
+			model: opts?.model ?? DEFAULT_MODEL,
 			questions,
 		}),
 		signal,
 	});
-
 	if (!response.ok) {
 		const body = (await response.text().catch(() => "")).slice(0, ERROR_BODY_MAX_CHARS);
-		throw new Error(`typesafe: HTTP ${response.status}: ${body}`);
+		throw new Error(`TypeSafe evaluate failed: HTTP ${response.status}${body ? `: ${body}` : ""}`);
 	}
 
 	const payload: unknown = await response.json();
 	if (!isRecord(payload) || !isRecord(payload.answers)) {
-		throw new Error("typesafe: malformed response (missing answers map)");
+		throw new Error("TypeSafe evaluate returned a malformed response (missing answers map)");
 	}
-	const model = typeof payload.model === "string" ? payload.model : (opts?.model ?? TYPESAFE_DEFAULT_MODEL);
-	const usage = isRecord(payload.usage) ? (payload.usage as TypeSafeEvaluateResult["usage"]) : undefined;
-
 	const answers: Record<string, TypeSafeAnswer> = {};
-	for (const [id, question] of Object.entries(questions)) {
-		const answer = payload.answers[id];
-		if (!isRecord(answer) || answer.type !== question.type) continue;
-		answers[id] = answer as unknown as TypeSafeAnswer;
+	for (const [id, raw] of Object.entries(payload.answers)) {
+		const question = questions[id];
+		if (!isRecord(raw) || question === undefined || raw.type !== question.type) continue;
+		const answer: TypeSafeAnswer = { type: question.type };
+		if (typeof raw.noul === "number") answer.noul = raw.noul;
+		if (typeof raw.choice === "string") answer.choice = raw.choice;
+		if (typeof raw.score === "number") answer.score = raw.score;
+		if (typeof raw.confidence === "number") answer.confidence = raw.confidence;
+		if (isRecord(raw.probabilities)) {
+			answer.probabilities = Object.fromEntries(
+				Object.entries(raw.probabilities).filter(
+					(entry): entry is [string, number] => typeof entry[1] === "number",
+				),
+			);
+		}
+		if (isRecord(raw.legend)) {
+			answer.legend = Object.fromEntries(
+				Object.entries(raw.legend).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+			);
+		}
+		answers[id] = answer;
 	}
-	return { model, answers, usage };
+	const usage = isRecord(payload.usage)
+		? {
+				...(typeof payload.usage.input_tokens === "number" ? { input_tokens: payload.usage.input_tokens } : {}),
+				...(typeof payload.usage.output_tokens === "number" ? { output_tokens: payload.usage.output_tokens } : {}),
+			}
+		: undefined;
+	return {
+		model: typeof payload.model === "string" ? payload.model : (opts?.model ?? DEFAULT_MODEL),
+		answers,
+		...(usage ? { usage } : {}),
+	};
 }

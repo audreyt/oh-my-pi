@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added the built-in `judge` tool for calibrated typed judgments (noul/choice/score) via the TypeSafe System One API, enabled by `judge.enabled` and configured with `TYPESAFE_API_KEY`.
 
 ### Added
 

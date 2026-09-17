@@ -4700,6 +4700,17 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"judge.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Available Tools",
+			label: "Judge",
+			description: "Enable the judge tool for TypeSafe typed judgments (requires TYPESAFE_API_KEY)",
+		},
+	},
+
 	"security.enabled": {
 		type: "boolean",
 		default: false,

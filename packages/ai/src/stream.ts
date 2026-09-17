@@ -831,6 +831,7 @@ const LEGACY_ENV_KEYS: Record<string, KeyResolver> = {
 	tinyfish: "TINYFISH_API_KEY",
 	typesafe: "TYPESAFE_API_KEY",
 	firecrawl: "FIRECRAWL_API_KEY",
+	typesafe: "TYPESAFE_API_KEY",
 };
 
 /**
