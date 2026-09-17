@@ -6,6 +6,9 @@
 - Added the built-in `judge` tool for calibrated typed judgments (noul/choice/score) through the session's judgment backend (`providers.judgmentProvider`), enabled by `judge.enabled`.
 - Added opt-in `skills.suggestion` setting: when enabled, each user turn makes one judgment-backend call that may inject a one-line skill suggestion into the turn context.
 
+### Fixed
+
+- Fixed startup aborting when the plugins directory exists but cannot be read — a sandboxed run, a restrictive mode, or a manifest symlinked into a denied path; the unreadable root is now skipped with a warning.
 ## [18.2.4] - 2026-09-17
 
 ### Added
