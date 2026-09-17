@@ -4,13 +4,7 @@
 ### Added
 
 - Added the built-in `judge` tool for calibrated typed judgments (noul/choice/score) via the TypeSafe System One API, enabled by `judge.enabled` and configured with `TYPESAFE_API_KEY`.
-
-### Added
-
 - Added `typesafe` (TypeSafe System One / Jev) as a backend for `providers.autoThinkingModel` and `providers.unexpectedStopModel`, returning calibrated typed judgments instead of parsed text; requires `TYPESAFE_API_KEY`.
-
-### Added
-
 - Added opt-in `skills.suggestion` setting: when enabled and `TYPESAFE_API_KEY` is set, each user turn makes one TypeSafe API call that may inject a one-line skill suggestion into the turn context.
 
 ### Fixed
