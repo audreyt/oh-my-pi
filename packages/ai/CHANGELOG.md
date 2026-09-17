@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `typesafe` env-key mapping so `getEnvApiKey("typesafe")` resolves `TYPESAFE_API_KEY`.
+
 ## [18.2.2] - 2026-09-16
 
 ### Added
