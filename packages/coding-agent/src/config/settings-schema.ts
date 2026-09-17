@@ -9,6 +9,7 @@ import {
 } from "../blob-broker/destinations";
 import { DEFAULT_RELAY_URL } from "../collab/protocol";
 import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
+import type { SymbolKey } from "../modes/theme/symbols";
 import {
 	COMPACTION_METHOD_CHOICES,
 	type CompactionMethod,
@@ -33,8 +34,6 @@ import {
 	ONLINE_AUTO_THINKING_MODEL_KEY,
 	ONLINE_MEMORY_MODEL_KEY,
 	ONLINE_TINY_TITLE_MODEL_KEY,
-	TINY_CLASSIFIER_MODEL_OPTIONS,
-	TINY_CLASSIFIER_MODEL_VALUES,
 	TINY_MEMORY_MODEL_OPTIONS,
 	TINY_MEMORY_MODEL_VALUES,
 	TINY_TITLE_MODEL_OPTIONS,
@@ -169,7 +168,7 @@ export type SettingTab =
 	| "providers";
 
 /** Tab display metadata - icon is resolved via theme.symbol() */
-export type TabMetadata = { label: string; icon: `tab.${string}` };
+export type TabMetadata = { label: string; icon: Extract<SymbolKey, `tab.${string}`> };
 
 /** Ordered list of tabs for UI rendering */
 export const SETTING_TABS: SettingTab[] = [
@@ -186,7 +185,7 @@ export const SETTING_TABS: SettingTab[] = [
 ];
 
 /** Tab display metadata - icon is a symbol key from theme.ts (tab.*) */
-export const TAB_METADATA: Record<SettingTab, { label: string; icon: `tab.${string}` }> = {
+export const TAB_METADATA: Record<SettingTab, TabMetadata> = {
 	appearance: { label: "Appearance", icon: "tab.appearance" },
 	model: { label: "Model", icon: "tab.model" },
 	interaction: { label: "Interaction", icon: "tab.interaction" },
@@ -781,6 +780,17 @@ export const SETTINGS_SCHEMA = {
 			label: "Composer Shape",
 			description: "Visual layout of the input editor and status line",
 			options: "runtime",
+		},
+	},
+	"composer.tokenRate": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "appearance",
+			group: "Composer",
+			label: "Generation Rate",
+			description:
+				"Show a live generation tok/s readout on the working row, docked right next to the session title. Estimated from streamed deltas and corrected by the provider's billed output count as each message completes.",
 		},
 	},
 
@@ -5851,6 +5861,31 @@ export const SETTINGS_SCHEMA = {
 			options: TTS_LOCAL_VOICE_OPTIONS,
 		},
 	},
+	"providers.judgmentProvider": {
+		type: "enum",
+		values: ["auto", "typesafe", "llm"] as const,
+		default: "auto",
+		ui: {
+			tab: "providers",
+			group: "Tiny Model",
+			label: "Judgment Provider",
+			description:
+				"Preferred backend for typed judgments (auto-thinking difficulty, Smart unexpected-stop detection, git AI staging, eval judge()). Auto uses TypeSafe when authenticated; failed TypeSafe requests fall back through tiny, smol, default, then the active session model.",
+			options: [
+				{ value: "auto", label: "Auto", description: "TypeSafe when authenticated, else the LLM bridge (default)" },
+				{
+					value: "typesafe",
+					label: "TypeSafe",
+					description: "Prefer TypeSafe; fall back through the online model roles on failure",
+				},
+				{
+					value: "llm",
+					label: "LLM",
+					description: "Never TypeSafe; keyword prompts to the tiny/smol or local model",
+				},
+			],
+		},
+	},
 	"providers.tinyModel": {
 		type: "enum",
 		values: TINY_TITLE_MODEL_VALUES,
@@ -5914,7 +5949,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Thinking",
 			label: "Auto Thinking Model",
 			description:
-				"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, a local on-device model, or TypeSafe (Jev) typed judgments",
+				"Difficulty classifier for the `auto` thinking level: online (the TINY role from /models, else smol) by default, or a local on-device model",
 			condition: "autoThinkingActive",
 			options: AUTO_THINKING_MODEL_OPTIONS,
 		},
@@ -5963,16 +5998,16 @@ export const SETTINGS_SCHEMA = {
 	},
 	"providers.unexpectedStopModel": {
 		type: "enum",
-		values: TINY_CLASSIFIER_MODEL_VALUES,
+		values: TINY_MEMORY_MODEL_VALUES,
 		default: ONLINE_MEMORY_MODEL_KEY,
 		ui: {
 			tab: "providers",
 			group: "Tiny Model",
 			label: "Unexpected Stop Model",
 			description:
-				"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, a local on-device model, or TypeSafe (Jev) typed judgments.",
+				"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
 			condition: "unexpectedStopSmart",
-			options: TINY_CLASSIFIER_MODEL_OPTIONS,
+			options: TINY_MEMORY_MODEL_OPTIONS,
 		},
 	},
 

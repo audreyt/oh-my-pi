@@ -1,12 +1,11 @@
-Judge: calibrated typed judgments over supplied state via TypeSafe System One (Jev).
+Judge: calibrated typed judgments over supplied state via the session's judgment backend (`providers.judgmentProvider` — TypeSafe System One when authenticated, else the tiny/smol chat bridge).
 
 Use for ranking, verification, routing, and extraction decisions where a calibrated answer beats free-form reasoning. NOT for generating text or reasoning — it returns judgments, not prose.
 
 - `state`: the object or text being judged.
 - `questions`: map of question id → `{ type, instructions, criteria? }`. Question types:
   - `noul` → answer carries `noul`: P(yes) in 0..1.
-  - `choice` → answer carries `choice` (selected option), `probabilities` (per-option), `confidence`, and `legend` (option labels).
-  - `score` → answer carries `score` (weighted level) and `confidence`.
-- `model`: optional TypeSafe model override (default `jev-latest`).
+  - `choice` → answer carries `choice` (selected option), `probabilities` (per-option), `confidence`. `criteria` maps each option to a rubric string or null.
+  - `score` → answer carries `score` (weighted level), `probabilities`, `confidence`. `criteria` is an ordered array of level descriptions.
 
-Returns `{ model, answers, usage }` where `answers` mirrors the `questions` keys. Answers whose type does not match the question are dropped. Requires `TYPESAFE_API_KEY`.
+Returns `{ api, provider, model, answers, usage }` where `answers` mirrors the `questions` keys.

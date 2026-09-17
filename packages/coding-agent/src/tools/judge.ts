@@ -1,16 +1,18 @@
 /**
  * Judge Tool
  *
- * Calibrated typed judgments via the TypeSafe System One (Jev) API: noul
- * probabilities, option choices, and weighted scores over caller-supplied
- * state. A network read tool — it judges, it does not generate.
+ * Calibrated typed judgments through the session's judgment backend
+ * (`providers.judgmentProvider`): TypeSafe System One when authenticated,
+ * otherwise the tiny/smol chat bridge. A network read tool — it judges, it
+ * does not generate.
  */
-
 import { type } from "@oh-my-pi/omptype";
+import type { JudgmentResult, JudgmentState, Questions } from "@oh-my-pi/pi-ai";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { prompt } from "@oh-my-pi/pi-utils";
+import { resolveJudge } from "../judgment";
 import judgeDescription from "../prompts/tools/judge.md" with { type: "text" };
-import { evaluateTypeSafe, getTypeSafeApiKey, type TypeSafeEvaluateResult } from "../typesafe/client";
+import { ONLINE_MEMORY_MODEL_KEY } from "../tiny/models";
 import type { ToolSession } from ".";
 import { throwIfAborted } from "./tool-errors";
 
@@ -20,25 +22,25 @@ export const judgeSchema = type({
 	questions: type({
 		"[string]": {
 			type: "'noul' | 'choice' | 'score'",
-			instructions: "unknown",
+			instructions: "string",
 			"criteria?": "unknown",
 		},
 	}).describe("map of question id → { type: noul|choice|score, instructions, criteria? }"),
-	"model?": type("string").describe("TypeSafe model override (default jev-latest)"),
 });
 
 export type JudgeToolParams = typeof judgeSchema.infer;
 
 export interface JudgeToolDetails {
-	result?: TypeSafeEvaluateResult;
+	result?: JudgmentResult;
 	error?: string;
 }
 
 /**
  * Judge tool implementation.
  *
- * Always registered when `judge.enabled`; calls without `TYPESAFE_API_KEY`
- * return a clear error result, mirroring web_search's unconfigured behavior.
+ * Always registered when `judge.enabled`; resolves the session's judgment
+ * backend per call so `providers.judgmentProvider` changes take effect
+ * immediately and TypeSafe failures fall back to the chat bridge.
  */
 export class JudgeTool implements AgentTool<typeof judgeSchema, JudgeToolDetails> {
 	readonly name = "judge";
@@ -48,7 +50,7 @@ export class JudgeTool implements AgentTool<typeof judgeSchema, JudgeToolDetails
 	readonly parameters = judgeSchema;
 	readonly strict = true;
 	readonly loadMode = "discoverable";
-	readonly summary = "Calibrated typed judgments via TypeSafe";
+	readonly summary = "Calibrated typed judgments";
 
 	constructor(private readonly session: ToolSession) {
 		this.description = prompt.render(judgeDescription);
@@ -61,20 +63,25 @@ export class JudgeTool implements AgentTool<typeof judgeSchema, JudgeToolDetails
 		_onUpdate?: AgentToolUpdateCallback<JudgeToolDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<JudgeToolDetails>> {
-		const apiKey = getTypeSafeApiKey();
-		if (!apiKey) {
-			const message = "TypeSafe is not configured. Set TYPESAFE_API_KEY to enable the judge tool.";
+		const registry = this.session.modelRegistry;
+		if (!registry) {
+			const message = "No model registry available to resolve a judgment backend.";
 			return {
 				content: [{ type: "text" as const, text: `Error: ${message}` }],
 				details: { error: message },
 			};
 		}
 		try {
-			const result = await evaluateTypeSafe(params.state, params.questions, {
-				apiKey,
-				signal,
-				model: params.model,
+			const judge = resolveJudge({
+				settings: this.session.settings,
+				registry,
+				backend: ONLINE_MEMORY_MODEL_KEY,
+				sessionModel: this.session.getActiveModel?.(),
 			});
+			const result = await judge.judge(
+				{ state: params.state as JudgmentState, questions: params.questions as Questions },
+				{ signal },
+			);
 			return {
 				content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
 				details: { result },

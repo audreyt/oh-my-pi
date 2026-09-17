@@ -6,11 +6,26 @@
 
 - OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 - Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch.
-- Added `TYPESAFE_API_KEY` to the legacy env-key map so `getEnvApiKey("typesafe")` resolves the TypeSafe System One credential.
 
 ### Changed
 
 - `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+## [18.2.4] - 2026-09-17
+
+### Added
+
+- Added the `judgment` module for typed questions over JSON state, including choice, yes/no, and score judgments through the `Judge` interface.
+- Added `TypeSafeJudge` support with TypeSafe System One authentication, credential rotation on unauthorized responses, and retry-aware backoff.
+- Added `TextJudge` and `chatTextBackend` for model-based judgments, with structured state rendering and safeguards that prevent embedded requests from being executed.
+- Added automatic format-correction retries to `TextJudge` when models return malformed output.
+- Added the `guardState` option to `TextBackend` to control whether safety guidance is included in prompts.
+
+## [18.2.3] - 2026-09-17
+
+### Added
+
+- `stream()` and `streamSimple()` support asynchronous model header resolution for each request attempt, including authentication retries and cancellation.
+- Provider login prompts can request masked entry with `secret: true`.
 
 ## [18.2.2] - 2026-09-16
 

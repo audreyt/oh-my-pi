@@ -229,8 +229,12 @@ import {
 import { supportsExternalThinking } from "../tools/think";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
-import { getTypeSafeApiKey } from "../typesafe/client";
+import { resolveJudge } from "../judgment";
+import { ONLINE_MEMORY_MODEL_KEY } from "../tiny/models";
 import type { WorkPoolYieldItem } from "../task/workpool-yield";
+import type { AgentDefinition } from "../task/types";
+import type { ModelMention } from "./model-mention-syntax";
+import { ModelMentionRegistry } from "./model-mentions";
 import { parseCommandArgs } from "../utils/command-args";
 import type { EditMode } from "../utils/edit-mode";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
@@ -677,6 +681,7 @@ export class AgentSession {
 	#planModeReminderCount = 0;
 	#planModeReminderAwaitingProgress = false;
 	readonly #todo: TodoTracker;
+	readonly #modelMentions: ModelMentionRegistry;
 	#workPoolYieldItems: readonly WorkPoolYieldItem[] = [];
 	/** Item set matching the last successfully rebuilt provider prompt. The base
 	 *  prompt starts consistent with the empty set; every later value is a
@@ -1390,6 +1395,11 @@ export class AgentSession {
 			consumeLastServedToolChoiceLabel: () => this.#toolChoiceQueue.consumeLastServedLabel(),
 		};
 		this.#todo = new TodoTracker(todoHost);
+		this.#modelMentions = new ModelMentionRegistry({
+			sessionManager: this.sessionManager,
+			modelRegistry: this.#modelRegistry,
+			scopedModels: () => this.scopedModels.map(s => s.model),
+		});
 		this.#ownedAsyncJobManager = config.ownedAsyncJobManager;
 		this.#asyncJobManager = config.asyncJobManager ?? config.ownedAsyncJobManager;
 		const modelControlsHost: ModelControlsHost = {
@@ -1773,6 +1783,7 @@ export class AgentSession {
 		this.agent.providerSessionState = this.#providerSessionState;
 		this.#syncAgentSessionId();
 		this.#todo.syncFromBranch();
+		this.#modelMentions.syncFromBranch();
 		this.#goalRuntime = new GoalRuntime({
 			getState: () => this.#goalModeState,
 			setState: state => {
@@ -1951,7 +1962,10 @@ export class AgentSession {
 			resetPlanReference: () => {
 				this.#planReferenceSent = false;
 			},
-			syncTodoPhasesFromBranch: () => this.#todo.syncFromBranch(),
+			syncTodoPhasesFromBranch: () => {
+				this.#todo.syncFromBranch();
+				this.#modelMentions.syncFromBranch();
+			},
 			resetAdvisorRuntimes: (reason?: string) => this.#advisors.resetAllRuntimes(reason),
 			rebaseAfterCompaction: () => this.#stats.rebaseAfterCompaction(),
 			recordAnchoredHistoryRewrite: tokensRemoved => this.#stats.recordAnchoredHistoryRewrite(tokensRemoved),
@@ -6364,7 +6378,8 @@ export class AgentSession {
 		}
 
 		// Expand file-based prompt templates if requested
-		const expandedText = expandPromptTemplates ? expandPromptTemplate(text, [...this.#promptTemplates]) : text;
+		const templated = expandPromptTemplates ? expandPromptTemplate(text, [...this.#promptTemplates]) : text;
+		const expandedText = options?.synthetic ? templated : this.#modelMentions.expandMentions(templated);
 
 		// Magic keywords ("ultrathink", "orchestrate"): append hidden system notices after the
 		// user's message that steer this turn. User-authored prompts only — synthetic /
@@ -7934,6 +7949,21 @@ export class AgentSession {
 		return this.#tools.skillWarnings;
 	}
 
+	/** Session-local general-purpose agents pinned to user-tagged models. */
+	getSessionAgents(): AgentDefinition[] {
+		return this.#modelMentions.sessionAgents();
+	}
+
+	/** Registered model pseudonyms on the active branch. */
+	get modelMentions(): readonly ModelMention[] {
+		return this.#modelMentions.mentions;
+	}
+
+	/** Resolve a model selector within the session picker's scope. */
+	findMentionableModel(selector: string): Model | undefined {
+		return this.#modelMentions.findMentionable(selector);
+	}
+
 	getTodoPhases(): TodoPhase[] {
 		return this.#todo.phases;
 	}
@@ -8655,20 +8685,25 @@ export class AgentSession {
 
 	/**
 	 * Opt-in per-turn skill suggestion (`skills.suggestion`). Scores the turn
-	 * against the skill catalog with one TypeSafe request and returns a hidden
+	 * against the skill catalog with one judgment request and returns a hidden
 	 * custom message naming the pick, or `undefined`. Never throws: the feature
-	 * off, no `TYPESAFE_API_KEY`, no tool able to read `skill://` URIs, or any
-	 * API failure all resolve to `undefined`.
+	 * off, skillful off, no tool able to read `skill://` URIs, or any backend
+	 * failure all resolve to `undefined`.
 	 */
 	async #suggestSkillForTurn(turnText: string): Promise<CustomMessage | undefined> {
 		try {
 			if (this.settings.get("skills.suggestion") !== true) return undefined;
 			if (this.settings.get("skillful") !== true) return undefined;
-			const apiKey = getTypeSafeApiKey();
-			if (!apiKey) return undefined;
 			const hasSkillReader = this.getEnabledToolNames().some(name => toolReadsSkillUris(this.getToolByName(name)));
 			if (!hasSkillReader) return undefined;
-			const name = await suggestSkill(turnText, this.skills, { apiKey });
+			const judge = resolveJudge({
+				settings: this.settings,
+				registry: this.#modelRegistry,
+				backend: ONLINE_MEMORY_MODEL_KEY,
+				sessionModel: this.model ?? undefined,
+				sessionId: this.sessionId,
+			});
+			const name = await suggestSkill(turnText, this.skills, judge);
 			if (!name) return undefined;
 			return {
 				role: "custom",
@@ -8893,6 +8928,7 @@ export class AgentSession {
 		this.agent.replaceMessages(activeMessages ?? sessionContext.messages);
 		this.#advisors.resetSessionState({ preserveCost: true });
 		this.#todo.syncFromBranch();
+		this.#modelMentions.syncFromBranch();
 		this.#closeCodexProviderSessionsForHistoryRewrite();
 		this.#checkpointState = undefined;
 		this.#pendingRewindReport = undefined;
@@ -9648,6 +9684,7 @@ export class AgentSession {
 			this.agent.replaceMessages(sessionContext.messages);
 			this.#advisors.resetSessionState({ preserveCost: true });
 			this.#todo.syncFromBranch();
+			this.#modelMentions.syncFromBranch();
 			if (switchingToDifferentSession) {
 				this.#closeAllProviderSessions("session switch");
 			} else if (didReloadConversationChange) {
@@ -9825,6 +9862,7 @@ export class AgentSession {
 				this.#emit({ type: "model_changed" });
 			}
 			this.#todo.syncFromBranch();
+			this.#modelMentions.syncFromBranch();
 			this.#advisors.resetAllRuntimes();
 			this.#advisors.reattachRecorderFeeds();
 			this.#reconnectToAgent();
@@ -9939,6 +9977,7 @@ export class AgentSession {
 			this.#clearSessionScopedToolState();
 			this.#rehydrateCheckpointRewindState();
 			this.#todo.syncFromBranch();
+			this.#modelMentions.syncFromBranch();
 			this.#freshProviderSessionId = undefined;
 			this.#clearInheritedProviderPromptCacheKey();
 			this.#syncAgentSessionId();
@@ -10077,6 +10116,7 @@ export class AgentSession {
 			});
 			this.sessionManager.appendMessage(sanitizeAssistantForReparentedHistory(assistantMessage));
 			this.#todo.syncFromBranch();
+			this.#modelMentions.syncFromBranch();
 			this.#freshProviderSessionId = undefined;
 			this.#syncAgentSessionId();
 			this.#memory.rekeyForCurrentSessionId();
@@ -10420,6 +10460,7 @@ export class AgentSession {
 		this.#rehydrateCheckpointRewindState();
 		this.#advisors.resetSessionState({ preserveCost: true });
 		this.#todo.syncFromBranch();
+		this.#modelMentions.syncFromBranch();
 		this.#closeCodexProviderSessionsForHistoryRewrite();
 
 		this.#branchSummaryAbortController = undefined;

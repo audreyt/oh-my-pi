@@ -117,6 +117,8 @@ import type { CompactMode } from "../session/compact-modes";
 import type { ForeignSessionSource } from "../session/foreign-session-store";
 import { HistoryStorage } from "../session/history-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
+import { modelMentionDisplayName } from "../session/model-mention-syntax";
+import { modelMentionChipLabel } from "./composer-attachments";
 import type { SessionContext } from "../session/session-context";
 import { getRecentSessions } from "../session/session-listing";
 import type { SessionManager } from "../session/session-manager";
@@ -169,6 +171,7 @@ import { getEditorCommand, openInEditor } from "../utils/external-editor";
 import { resumeCommand } from "../utils/resume-command";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../utils/session-color";
 import { messageHasDisplayableThinking } from "../utils/thinking-display";
+import { TokenRateMeter } from "../utils/token-rate";
 import {
 	disposeTerminalTitleState,
 	initTerminalTitleState,
@@ -805,6 +808,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	streamingMessage: AssistantMessage | undefined = undefined;
 	lastAssistantUsage: Usage | undefined = undefined;
 	servedModelTracker = new ServedModelTracker();
+	tokenRate = new TokenRateMeter(text => this.session.agent.tokenizer.countTokens(text));
 	loadingAnimation: Loader | undefined = undefined;
 	autoCompactionLoader: Loader | undefined = undefined;
 	retryLoader: Loader | undefined = undefined;
@@ -821,10 +825,26 @@ export class InteractiveMode implements InteractiveModeContext {
 		if (!name) return undefined;
 		return `\x1b[2;3m${sanitizeStatusText(name)}\x1b[23;22m`;
 	}
-	/** Idle stand-in for the working row in band mode: the docked title stays
-	 * readable between turns, in the same spot the loader's trailer uses. */
+	/** Generation tok/s: live while streaming, the last reading between
+	 * turns, blank until a run has produced enough tokens to measure. */
+	#tokenRateLabel(): string | undefined {
+		if (!settings.get("composer.tokenRate")) return undefined;
+		const rate = this.tokenRate.rate();
+		if (rate === null) return undefined;
+		return theme.fg("dim", `${theme.icon.throughput} ${rate.toFixed(1)} tok/s`);
+	}
+	/** Right-docked suffix of the working row: the tok/s readout, then the band-mode title. */
+	#workingRowTrailer(): string | undefined {
+		const rate = this.#tokenRateLabel();
+		const title = this.#workingTitleTrailer();
+		if (rate && title) return `${rate}  ${title}`;
+		return rate ?? title;
+	}
+	/** Idle stand-in for the working row: the last tok/s reading and the
+	 * band-mode title stay readable between turns, docked where the loader's
+	 * trailer was. */
 	renderIdleStatusHud(width: number): readonly string[] | undefined {
-		const trailer = this.#workingTitleTrailer();
+		const trailer = this.#workingRowTrailer();
 		if (!trailer) return undefined;
 		return ["", " ".repeat(Math.max(0, width - visibleWidth(trailer))) + trailer];
 	}
@@ -1050,6 +1070,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.streamingMessage = undefined;
 		this.lastAssistantUsage = undefined;
 		this.servedModelTracker = new ServedModelTracker();
+		this.tokenRate.reset();
 		this.pendingTools.clear();
 	}
 	readonly #uiHelpers: UiHelpers;
@@ -1128,6 +1149,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.editor.magicKeywordsEnabled = () => this.settings.get("magicKeywords.enabled");
 		this.editor.imageReferenceHyperlink = imageReferenceHyperlink;
 		this.editor.skillFilePath = name => this.skillCommands.get(`skill:${name}`)?.filePath;
+		this.editor.modelMentionLabel = selector => {
+			const model = this.session.findMentionableModel(selector);
+			return model ? modelMentionChipLabel(modelMentionDisplayName(model)) : undefined;
+		};
+		this.editor.modelMentionSelector = agent => this.session.modelMentions.find(m => m.agent === agent)?.selector;
 		this.editor.fileHyperlink = (filePath, text) => fileHyperlink(filePath, text, { line: 1 });
 		this.#ownsStartedUi = wasStarted;
 		this.keybindings = KeybindingsManager.inMemory();
@@ -5676,6 +5702,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		nextEditor.magicKeywordsEnabled = () => this.settings.get("magicKeywords.enabled");
 		nextEditor.imageReferenceHyperlink = imageReferenceHyperlink;
 		nextEditor.skillFilePath = name => this.skillCommands.get(`skill:${name}`)?.filePath;
+		nextEditor.modelMentionLabel = selector => {
+			const model = this.session.findMentionableModel(selector);
+			return model ? modelMentionChipLabel(modelMentionDisplayName(model)) : undefined;
+		};
+		nextEditor.modelMentionSelector = agent => this.session.modelMentions.find(m => m.agent === agent)?.selector;
 		nextEditor.fileHyperlink = (filePath, text) => fileHyperlink(filePath, text, { line: 1 });
 		nextEditor.onAutocompleteCancel = () => {
 			this.ui.requestRender(true);
@@ -5995,7 +6026,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				// status rows so the interrupt glyph reads as indented.
 				[` ${theme.icon.esc}`],
 			);
-			this.loadingAnimation.setTrailer(() => this.#workingTitleTrailer());
+			this.loadingAnimation.setTrailer(() => this.#workingRowTrailer());
 			this.statusContainer.addChild(this.loadingAnimation);
 		} else if (!this.statusContainer.children.includes(this.loadingAnimation)) {
 			this.statusContainer.disposeChildren();
