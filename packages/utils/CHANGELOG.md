@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- `withFileLock` now rejects with a typed `LockAcquireError` when the retry budget is exhausted, so callers can detect contention without matching the message text.
+
+### Fixed
+
+- Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
+- `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
+
 ## [18.2.5] - 2026-09-17
 
 ### Added
@@ -29,14 +38,6 @@
 ### Added
 
 - Added asynchronous and synchronous SQLite database opening APIs with path-attributed errors, optional corruption recovery that preserves private database and sidecar backups, and automatic retries for transient busy errors during asynchronous opens.
-### Added
-
-- `withFileLock` now rejects with a typed `LockAcquireError` when the retry budget is exhausted, so callers can detect contention without matching the message text.
-
-### Fixed
-
-- Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
-- `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
 
 ## [18.2.1] - 2026-09-15
 
@@ -118,16 +119,10 @@
 - Fixed `filterChildShellEnv` applying the omp process's own launch-environment provenance (the pre-dotenv `NODE_ENV` and launcher-owned names read from `/proc/self/environ`) to caller-supplied environment objects; launch provenance now only applies when filtering the live `process.env`/`Bun.env`, and an explicit env resolves its dotenv mode from its own `NODE_ENV`.
 
 ## [18.1.11] - 2026-09-05
-### Added
-
-- `withFileLock` now rejects with a typed `LockAcquireError` when the retry budget is exhausted, so callers can detect contention without matching the message text.
 
 ### Fixed
 
-- Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
-
 - Fixed `extractRetryHint` dropping the longer timing signal when an error body carries both an account reset and an appended retry hint: competing signals now merge by longest window instead of first match, so retries honor the provider's full backoff.
-- `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
 
 ## [18.1.7] - 2026-09-03
 

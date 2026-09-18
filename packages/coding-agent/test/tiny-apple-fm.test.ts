@@ -130,14 +130,26 @@ describe("afm-core client titles", () => {
 			const sidecar = await writeFakeSidecar(
 				dir,
 				bunSidecar(`
+const cmd = process.argv[2];
+if (cmd === "status") {
+	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+	process.exit(0);
+}
 process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" }) + "\\n");
 `),
 			);
 			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
 			const client = new TinyTitleClient();
+			const events: string[] = [];
+			client.onProgress(event => {
+				if (event.modelKey === "afm-core") events.push(event.status);
+			});
 			await expect(client.generate("afm-core", "the login button is broken on mobile")).resolves.toBe(
 				"Fix login button",
 			);
+			expect(events).toContain("initiate");
+			expect(events).toContain("ready");
+			expect(events).not.toContain("error");
 		} finally {
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
@@ -380,72 +392,6 @@ process.stdout.write(JSON.stringify({ text: "<title>Fix login button</title>" })
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});
-
-	it("completes memory prompts through the sidecar with maxTokens", async () => {
-		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
-		try {
-			const sidecar = await writeFakeSidecar(
-				dir,
-				bunSidecar(`
-const cmd = process.argv[2];
-if (cmd === "status") {
-	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
-	process.exit(0);
-}
-const raw = await Bun.stdin.text();
-const req = JSON.parse(raw);
-if (req.maxTokens !== 16) throw new Error("missing maxTokens");
-process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
-`),
-			);
-			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-			const client = new TinyTitleClient();
-			try {
-				await expect(
-					client.complete("afm-core", "did the model stop unexpectedly?", { maxTokens: 16 }),
-				).resolves.toBe("yes");
-			} finally {
-				// Workers outlive the client by design; shut this test's
-				// worker down so its baked-in sidecar path cannot leak into
-				// the next test's fresh worker.
-				await client.terminate();
-			}
-		} finally {
-			await fs.promises.rm(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("applies the completion default and ceiling before invoking AFM", async () => {
-		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
-		try {
-			const sidecar = await writeFakeSidecar(
-				dir,
-				bunSidecar(`
-const cmd = process.argv[2];
-if (cmd === "status") {
-	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
-	process.exit(0);
-}
-const raw = await Bun.stdin.text();
-const req = JSON.parse(raw);
-process.stdout.write(JSON.stringify({ text: String(req.maxTokens) }) + "\\n");
-`),
-			);
-			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
-			const client = new TinyTitleClient();
-			try {
-				await expect(client.complete("afm-core", "default cap")).resolves.toBe("256");
-				await expect(client.complete("afm-core", "ceiling cap", { maxTokens: 5000 })).resolves.toBe("1024");
-			} finally {
-				// See above: shut the worker down so the next test spawns
-				// fresh with its own sidecar.
-				await client.terminate();
-			}
-		} finally {
-			await fs.promises.rm(dir, { recursive: true, force: true });
-		}
-	});
-
 	it("resolves null on abort without disabling AFM", async () => {
 		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
 		try {
@@ -533,6 +479,71 @@ process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\
 		} finally {
 			controller.abort();
 			await pending?.catch(() => {});
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("completes memory prompts through the sidecar with maxTokens", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = await writeFakeSidecar(
+				dir,
+				bunSidecar(`
+const cmd = process.argv[2];
+if (cmd === "status") {
+	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+	process.exit(0);
+}
+const raw = await Bun.stdin.text();
+const req = JSON.parse(raw);
+if (req.maxTokens !== 16) throw new Error("missing maxTokens");
+process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			try {
+				await expect(
+					client.complete("afm-core", "did the model stop unexpectedly?", { maxTokens: 16 }),
+				).resolves.toBe("yes");
+			} finally {
+				// Workers outlive the client by design; shut this test's
+				// worker down so its baked-in sidecar path cannot leak into
+				// the next test's fresh worker.
+				await client.terminate();
+			}
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("applies the completion default and ceiling before invoking AFM", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = await writeFakeSidecar(
+				dir,
+				bunSidecar(`
+const cmd = process.argv[2];
+if (cmd === "status") {
+	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+	process.exit(0);
+}
+const raw = await Bun.stdin.text();
+const req = JSON.parse(raw);
+process.stdout.write(JSON.stringify({ text: String(req.maxTokens) }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			try {
+				await expect(client.complete("afm-core", "default cap")).resolves.toBe("256");
+				await expect(client.complete("afm-core", "ceiling cap", { maxTokens: 5000 })).resolves.toBe("1024");
+			} finally {
+				// See above: shut the worker down so the next test spawns
+				// fresh with its own sidecar.
+				await client.terminate();
+			}
+		} finally {
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
 	});

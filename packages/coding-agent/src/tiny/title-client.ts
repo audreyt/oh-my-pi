@@ -600,6 +600,7 @@ export class TinyTitleClient {
 	 */
 	prewarm(modelKey: string): void {
 		if (!isTinyTitleLocalModelKey(modelKey) || this.#failedModels.has(modelKey)) return;
+		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey))) return;
 		try {
 			this.#ensureWorker(modelKey).handle.send({ type: "ping", id: String(++this.#nextRequestId) });
 		} catch (error) {
