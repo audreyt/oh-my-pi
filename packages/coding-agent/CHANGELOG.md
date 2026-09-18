@@ -1,9 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
+### Changed
+
+- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 ### Fixed
 
 - Fixed `omp auth-broker token` and `omp auth-gateway token` exiting silently without creating a token on Windows when no token file exists yet; token and config reads now use `node:fs` instead of `Bun.file`.
+- Extensions can set the `none` service-tier sentinel via `setServiceTier`, opting Doubleword sessions back onto standard processing instead of throwing ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.2.5] - 2026-09-17
 
@@ -118,16 +128,6 @@
 - A corrupted or externally modified session file no longer leaves the session impossible to close; a subsequent Ctrl+C exits without rewriting the session log.
 - Fixed silent MCP requests being terminated by an undeclared idle timeout; closing a legacy SSE connection now also cancels pending requests and notifications.
 - Fixed browser reuse for Chromium installed behind Linux wrapper scripts and prevented duplicate launches when a profile is locked ([#12236](https://github.com/can1357/oh-my-pi/pull/12236) by [@shivamklr](https://github.com/shivamklr)).
-- Added `tui.titleSpinner` (`braille` | `dots` | `line`, default `braille`) to pick the terminal-title working-state spinner glyphs alongside the existing `tui.titleState` on/off toggle.
-- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
-
-### Changed
-
-- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
-
-### Fixed
-
-- Extensions can set the `none` service-tier sentinel via `setServiceTier`, opting Doubleword sessions back onto standard processing instead of throwing.
 
 ## [18.2.1] - 2026-09-15
 

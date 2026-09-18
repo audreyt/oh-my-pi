@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
+### Changed
+
+- `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 ### Fixed
 
 - Fixed auth-broker client config resolution failing silently on Windows when reading the token file or `config.yml`; reads now use `node:fs` instead of `Bun.file`.
@@ -49,14 +58,6 @@
 - ChatGPT accounts that have exhausted a plan's usage window but still have available Codex credit can now continue to be selected for Codex requests.
 - Cursor requests now honor explicit max-mode markers on wire-backed models instead of inferring the mode from the model suffix.
 - OpenAI-compatible chat responses containing only structured tool calls now report time to first token correctly.
-
-### Added
-
-- OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
-
-### Changed
-
-- `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.2.1] - 2026-09-15
 
