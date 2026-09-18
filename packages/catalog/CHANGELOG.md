@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added hosted image-model defaults to the compat policy for the model-less `generate_image` backends (`meta-image` → `muse-image-1.0`, plus Gemini, Antigravity, OpenRouter, xAI, and DeepInfra), with credential-run backends declared in the same policy.
+
 ## [18.2.5] - 2026-09-17
 
 ### Added
@@ -35,9 +39,6 @@
 - Fixed recovery of corrupted model caches so private backups are preserved and concurrent recovery cannot overwrite a cache that has already been restored.
 - Fixed pricing for Devin (SWE-2, SWE-1.7, and GLM-5.2 High) and Kimi Code models when upstream discovery omits cost information. SWE-2 now reflects its promotional pricing through December 31, 2026, then switches to list pricing on January 1, 2027.
 - Fixed pricing and chat routing for Devin Fusion models so composite models use their own headline rates and supported Fusion lanes connect directly instead of failing through an incompatible routing path.
-### Added
-
-- Added the Meta/Muse Image hosted image operation to the compat policy: a `meta-image` default of `muse-image-1.0` for the model-less `generate_image` tool.
 
 ## [18.2.1] - 2026-09-15
 
