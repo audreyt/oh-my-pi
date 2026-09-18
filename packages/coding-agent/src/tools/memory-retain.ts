@@ -49,7 +49,6 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema, Me
 				cwd: this.session.settings.getCwd(),
 				session: this.session as never,
 			};
-			const ids: string[] = [];
 			const lines: string[] = [];
 			let stored = 0;
 			for (const item of params.items) {
@@ -68,7 +67,6 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema, Me
 				}
 				stored += result.stored;
 				const id = result.ids?.[0];
-				if (id) ids.push(id);
 				const candidateLines = (result.candidates ?? []).slice(0, 6).map(candidate => {
 					const score =
 						candidate.score === undefined
@@ -89,7 +87,7 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema, Me
 			const body = [`${stored} ${noun} stored.`, ...lines].filter(Boolean).join("\n");
 			return {
 				content: [{ type: "text", text: body }],
-				details: { count: stored, ids },
+				details: { count: stored },
 			};
 		}
 
