@@ -112,7 +112,7 @@ describe("STTController preflight", () => {
 		const isCached = vi.spyOn(downloader, "isSttModelCached").mockResolvedValue(true);
 		// A warmup that never resolves would hang #ensureDeps if it were awaited;
 		// reaching "recording" proves the fast path does not block on it.
-		const download = vi.spyOn(downloader, "downloadSttModel").mockReturnValue(new Promise<void>(() => {}));
+		const download = vi.spyOn(downloader, "downloadSttModel").mockReturnValue(Promise.withResolvers<void>().promise);
 
 		const editor = makeEditor();
 		controller = new STTController(() => ({ stop: vi.fn() }));
@@ -157,7 +157,7 @@ describe("STTController preflight", () => {
 
 	it("re-runs preflight when the model changes mid-session", async () => {
 		const isCached = vi.spyOn(downloader, "isSttModelCached").mockResolvedValue(true);
-		vi.spyOn(downloader, "downloadSttModel").mockReturnValue(new Promise<void>(() => {}));
+		vi.spyOn(downloader, "downloadSttModel").mockReturnValue(Promise.withResolvers<void>().promise);
 
 		const editor = makeEditor();
 		controller = new STTController(() => ({ stop: vi.fn() }));
@@ -286,7 +286,7 @@ describe("STTController preflight", () => {
 
 	it("stops recording and surfaces asynchronous microphone failures", async () => {
 		vi.spyOn(downloader, "isSttModelCached").mockResolvedValue(true);
-		vi.spyOn(downloader, "downloadSttModel").mockReturnValue(new Promise<void>(() => {}));
+		vi.spyOn(downloader, "downloadSttModel").mockReturnValue(Promise.withResolvers<void>().promise);
 		let onAudio: ((error: Error | null, samples: Float32Array) => void) | undefined;
 		const stopCapture = vi.fn();
 		const editor = makeEditor();
