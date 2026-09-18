@@ -12,7 +12,7 @@ import { resolveModelPolicy } from "@oh-my-pi/pi-catalog/compat/resolve";
 import { getBundledModelReferenceIndex } from "@oh-my-pi/pi-catalog/identity/bundled";
 import { resolveModelReference } from "@oh-my-pi/pi-catalog/identity/reference";
 import { DOUBLEWORD_BASE_URL, doublewordModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { ModelSpec } from "@oh-my-pi/pi-catalog/types";
+import type { FetchImpl, ModelSpec } from "@oh-my-pi/pi-catalog/types";
 
 function doublewordSpec(overrides: Partial<ModelSpec<"openai-responses">> = {}): ModelSpec<"openai-responses"> {
 	return {
@@ -77,12 +77,12 @@ describe("Doubleword provider", () => {
 		expect(shouldSendServiceTier("flex", model)).toBe(false);
 	});
 
-	test("dynamic discovery recovers canonical params, drops non-chat SKUs, and never borrows pricing", async () => {
+	test("dynamic discovery recovers canonical params, drops non-chat SKUs, and never borrows pricing or thinking", async () => {
 		const index = getBundledModelReferenceIndex();
 		const resold = [...index.exact.values()].find(model => {
 			if (model.provider === "doubleword" || !model.id.includes("/")) return false;
 			const ref = resolveModelReference(model.id, index);
-			return ref?.reasoning === true && (ref.contextWindow ?? 0) > 0;
+			return ref?.reasoning === true && ref.thinking !== undefined && (ref.contextWindow ?? 0) > 0;
 		});
 		if (!resold) {
 			throw new Error("no bundled resold reasoning model available to exercise canonical recovery");
@@ -95,14 +95,14 @@ describe("Doubleword provider", () => {
 			"deepseek-ai/DeepSeek-OCR-2",
 			"doubleword-only/nonexistent-model",
 		];
-		const fetch = (async () =>
+		const fetch: FetchImpl = async () =>
 			new Response(
 				JSON.stringify({
 					object: "list",
 					data: discoveredIds.map(id => ({ id, object: "model", created: 0, owned_by: "None" })),
 				}),
 				{ status: 200, headers: { "content-type": "application/json" } },
-			)) as unknown as typeof globalThis.fetch;
+			);
 
 		const options = doublewordModelManagerOptions({ apiKey: "test-key", fetch });
 		const models = (await options.fetchDynamicModels?.()) ?? [];
@@ -119,6 +119,10 @@ describe("Doubleword provider", () => {
 		expect(recovered?.contextWindow).toBe(canonical?.contextWindow ?? null);
 		expect(recovered?.reasoning).toBe(true);
 		expect(recovered?.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+		// The canonical reference belongs to another host: its thinking ladder
+		// (effort vocabulary, wire routing) must not leak onto the Doubleword row.
+		expect(canonical?.thinking).toBeDefined();
+		expect(recovered?.thinking).toBeUndefined();
 
 		const unknown = byId.get("doubleword-only/nonexistent-model");
 		expect(unknown?.contextWindow).toBeNull();
