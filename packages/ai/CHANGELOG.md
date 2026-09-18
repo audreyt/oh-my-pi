@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
+
 ### Fixed
 
 - Fixed auth-broker client config resolution failing silently on Windows when reading the token file or `config.yml`; reads now use `node:fs` instead of `Bun.file`.
@@ -49,10 +54,6 @@
 - ChatGPT accounts that have exhausted a plan's usage window but still have available Codex credit can now continue to be selected for Codex requests.
 - Cursor requests now honor explicit max-mode markers on wire-backed models instead of inferring the mode from the model suffix.
 - OpenAI-compatible chat responses containing only structured tool calls now report time to first token correctly.
-
-### Added
-
-- Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.2.1] - 2026-09-15
 
