@@ -402,7 +402,7 @@ export class AppleSpeechClient {
 			() => options.signal?.removeEventListener("abort", abort),
 		);
 
-		void (async () => {
+		const stdoutDone = (async () => {
 			for await (const bytes of readLines(proc.stdout as ReadableStream<Uint8Array>, stdoutAbort.signal)) {
 				const line = decoder.decode(bytes).trim();
 				if (!line) continue;
@@ -461,6 +461,12 @@ export class AppleSpeechClient {
 			.then(async exitCode => {
 				await Promise.race([stderrDone, Bun.sleep(STDERR_DRAIN_GRACE_MS)]);
 				const error = stderr.trim();
+				if (!settled && (exitCode === 0 || exitCode === null)) {
+					// The helper can exit before the reader consumes its final buffered
+					// events; drain stdout before treating a clean exit as success so
+					// stop() never resolves with a partial transcript.
+					await stdoutDone;
+				}
 				if (!settled) {
 					if (exitCode === 0 || exitCode === null) {
 						finish(collectedSegments.join(" ") || lastPartial);
