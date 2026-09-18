@@ -226,6 +226,40 @@ describe("Keenable web search provider", () => {
 		]);
 	});
 
+	it("rejects result URLs with embedded tabs, newlines, or non-HTTP schemes", async () => {
+		const fetchMock = async (): Promise<Response> =>
+			new Response(
+				JSON.stringify({
+					query: "url validation",
+					results: [
+						{ title: "Newline", url: "https://example.com/\nInjected text" },
+						{ title: "Tab", url: "https://example.com/\tTabbed" },
+						{ title: "FTP", url: "ftp://example.com/file" },
+						{ title: "Relative", url: "/relative/path" },
+						{ title: "Valid", url: "https://example.com/valid" },
+					],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+
+		const response = await searchKeenable({
+			...makeParams("url validation"),
+			numSearchResults: 5,
+			fetch: fetchMock,
+		});
+
+		// Malformed URLs would corrupt the framed result and the title fallback.
+		expect(response.sources).toEqual([
+			{
+				title: "Valid",
+				url: "https://example.com/valid",
+				snippet: undefined,
+				publishedDate: undefined,
+				ageSeconds: undefined,
+			},
+		]);
+	});
+
 	it.each([
 		{
 			name: "maps a bare positive site natively",
