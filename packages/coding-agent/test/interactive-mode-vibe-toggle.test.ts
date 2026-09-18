@@ -7,6 +7,9 @@
  *    and `ask` was in the previous enabled toolset.
  * 3. Exiting unregisters the vibe tools and restores the pre-vibe active toolset
  *    exactly, including the legitimate empty set.
+ * 4. Resuming a vibe session from outside the mode keeps the fresh toolset
+ *    for exit restoration but still gates `ask` on the persisted entry-time
+ *    toolset, so a resume never re-grants an `ask` disabled at entry.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
@@ -701,6 +704,75 @@ describe("InteractiveMode vibe mode toggle", () => {
 			await resumedMode.handleVibeModeCommand();
 			expect(resumedMode.vibeModeEnabled).toBe(false);
 			expect(resumed.getActiveToolNames().toSorted()).toEqual(["bash", "read", "todo"]);
+		} finally {
+			resumedMode.stop();
+			await resumed.dispose();
+		}
+	});
+
+	it("does not re-grant Ask on resume when ask was disabled at vibe entry", async () => {
+		const model = session.model;
+		if (!model) throw new Error("Expected active model");
+		const openFixture = (toolNames: string[]) => {
+			const opened = new AgentSession({
+				agent: new Agent({
+					initialState: {
+						model,
+						systemPrompt: ["Test"],
+						tools: [],
+						messages: [],
+					},
+				}),
+				sessionManager: SessionManager.create(tempDir.path(), tempDir.path()),
+				settings: Settings.isolated({}),
+				modelRegistry,
+				toolRegistry: new Map(toolNames.map(name => [name, stubTool(name)])),
+				builtInToolNames: toolNames,
+				createVibeTools: () => VIBE_TOOL_NAMES.map(stubTool),
+			});
+			return {
+				session: opened,
+				mode: new InteractiveMode(opened, "test", undefined, undefined, undefined, undefined, new EventBus()),
+			};
+		};
+
+		// Target session entered vibe after the user disabled `ask` via
+		// `/tools`, so its persisted entry-time snapshot lacks `ask`.
+		const { session: targetSession, mode: targetMode } = openFixture(["read", "todo", "ask"]);
+		let targetFile: string;
+		try {
+			await targetMode.init({ suppressWelcomeIntro: true });
+			await targetSession.setActiveToolsByName(["read", "todo"]);
+			await targetMode.handleVibeModeCommand();
+			expect(targetSession.getActiveToolNames()).not.toContain("ask");
+			await targetSession.sessionManager.ensureOnDisk();
+			const file = targetSession.sessionFile;
+			if (!file) throw new Error("Expected persisted session file");
+			targetFile = file;
+		} finally {
+			targetMode.stop();
+			await targetSession.dispose();
+		}
+
+		// The resuming process is not in vibe mode, so reconcile rebuilds the
+		// exit snapshot from the fresh toolset — which includes `ask`. Ask
+		// eligibility must still come from the persisted entry-time snapshot,
+		// so the resume must not re-grant it.
+		const { session: resumed, mode: resumedMode } = openFixture(["read", "todo", "ask"]);
+		try {
+			await resumedMode.init({ suppressWelcomeIntro: true });
+			await resumed.setActiveToolsByName(["read", "todo", "ask"]);
+			expect(resumedMode.vibeModeEnabled).toBe(false);
+
+			expect(await resumed.switchSession(targetFile)).toBe(true);
+			expect(resumedMode.vibeModeEnabled).toBe(true);
+			expect(resumed.getActiveToolNames()).not.toContain("ask");
+			expect(resumed.getActiveToolNames()).toEqual(expect.arrayContaining(["read", "todo", ...VIBE_TOOL_NAMES]));
+
+			// Exit restoration keeps the fresh slate, not the stale snapshot.
+			await resumedMode.handleVibeModeCommand();
+			expect(resumedMode.vibeModeEnabled).toBe(false);
+			expect(resumed.getActiveToolNames().toSorted()).toEqual(["ask", "read", "todo"]);
 		} finally {
 			resumedMode.stop();
 			await resumed.dispose();
