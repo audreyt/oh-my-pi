@@ -309,13 +309,19 @@ class FoundationModelsModel {
 	}
 
 	async chat(request: Extract<TinyWorkerRequest, { type: "chat" }>, reply: ReplyTransport): Promise<string> {
-		await this.pipeline(reply, request.id);
 		const instructions = request.messages.find(message => message.role === "system")?.content ?? "";
 		const prompt = request.messages
 			.filter(message => message.role === "user")
 			.map(message => message.content)
 			.join("\n");
 		try {
+			// Probe inside the request scope: a transient probe failure
+			// (modelNotReady, unclassified transport) returns empty like a
+			// guardrail failure instead of failing the worker, so later
+			// completions re-probe and recover. Terminal availability
+			// faults still throw and fail closed. (The load path keeps
+			// throwing: download must report probe failures.)
+			await this.pipeline(reply, request.id);
 			// Bound AFM completion tokens (1–1024) like the ONNX path caps
 			// generation length; the sidecar has no safe default of its own.
 			const maxTokens = Math.min(Math.max(1, request.maxNewTokens), 1024);

@@ -570,6 +570,13 @@ export class TinyTitleClient {
 	}
 
 	async #connectDefault(modelKey: TinyLocalModelKey): Promise<WorkerHandle> {
+		const connectSpec = getTinyLocalModelSpec(modelKey);
+		if (connectSpec && isFoundationModelsSpec(connectSpec)) {
+			// Foundation Models has no MLX export; bypass the MLX branch
+			// outright so the missing-repository throw cannot trip the
+			// module-wide mlxUnavailable fallback for real MLX models.
+			return connectTinyWorker(onnxLaunch(modelKey, tinyModelEnv()), modelKey);
+		}
 		if (tinyWorkerUsesMlx()) {
 			try {
 				return await connectTinyWorker(

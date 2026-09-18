@@ -6,6 +6,7 @@
  */
 import * as path from "node:path";
 import { FileLock as NativeFileLock } from "@oh-my-pi/pi-natives";
+import { sleepLong } from "./async";
 
 /** Controls bounded waiting when an advisory file lock is contended. */
 export interface FileLockOptions {
@@ -51,32 +52,6 @@ function tryAcquireLock(lockPath: string): NativeFileLock | null {
 	return lock.acquired ? lock : null;
 }
 
-async function delay(ms: number, signal?: AbortSignal): Promise<void> {
-	if (signal?.aborted) {
-		throw signal.reason instanceof Error
-			? signal.reason
-			: new DOMException("The operation was aborted.", "AbortError");
-	}
-	if (!signal) {
-		await Bun.sleep(ms);
-		return;
-	}
-	const { promise, resolve, reject } = Promise.withResolvers<void>();
-	const timer = setTimeout(resolve, ms);
-	const onAbort = (): void => {
-		reject(
-			signal.reason instanceof Error ? signal.reason : new DOMException("The operation was aborted.", "AbortError"),
-		);
-	};
-	signal.addEventListener("abort", onAbort, { once: true });
-	try {
-		await promise;
-	} finally {
-		clearTimeout(timer);
-		signal.removeEventListener("abort", onAbort);
-	}
-}
-
 /** Acquire an exclusive lease; callers must release it when their operation ends. */
 export async function acquireFileLock(filePath: string, options: FileLockOptions = {}): Promise<FileLockHandle> {
 	const retries = options.retries ?? DEFAULT_OPTIONS.retries;
@@ -91,7 +66,9 @@ export async function acquireFileLock(filePath: string, options: FileLockOptions
 		}
 		const lock = tryAcquireLock(lockPath);
 		if (lock) return lock;
-		if (attempt + 1 < retries) await delay(retryDelayMs, options.signal);
+		// sleepLong chunks delays past the 32-bit timer ceiling instead of
+		// overflowing, and wakes promptly on abort like delay() did.
+		if (attempt + 1 < retries) await sleepLong(retryDelayMs, options.signal);
 	}
 
 	throw new LockAcquireError(filePath, retries);

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { resolveModels } from "@oh-my-pi/pi-coding-agent/cli/tiny-models-cli";
 import { getTinyLocalModelSpec } from "@oh-my-pi/pi-coding-agent/tiny/models";
-import { TinyTitleClient } from "../src/tiny/title-client";
+import { TinyTitleClient, tinyWorkerUsesMlx } from "../src/tiny/title-client";
 import {
 	LockAcquireError,
 	__internalsForTesting as fileLockInternals,
@@ -543,6 +543,77 @@ process.stdout.write(JSON.stringify({ text: String(req.maxTokens) }) + "\\n");
 				// fresh with its own sidecar.
 				await client.terminate();
 			}
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("recovers complete() after a modelNotReady probe without disabling AFM", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = await writeFakeSidecar(
+				dir,
+				bunSidecar(`
+const cmd = process.argv[2];
+if (cmd === "status") {
+	process.stdout.write(JSON.stringify({ error: "apple_fm_failed", reason: "modelNotReady" }) + "\\n");
+	process.exit(1);
+}
+process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const client = new TinyTitleClient();
+			try {
+				// A transient probe failure resolves null without failing
+				// the worker, so the model is not marked failed.
+				await expect(client.complete("afm-core", "did the model stop unexpectedly?")).resolves.toBeNull();
+				await Bun.write(
+					sidecar,
+					bunSidecar(`
+const cmd = process.argv[2];
+if (cmd === "status") {
+	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+	process.exit(0);
+}
+process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
+`),
+				);
+				await expect(client.complete("afm-core", "did the model stop unexpectedly?")).resolves.toBe("yes");
+			} finally {
+				await client.terminate();
+			}
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps MLX available when completing through afm-core", async () => {
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-afm-"));
+		try {
+			const sidecar = await writeFakeSidecar(
+				dir,
+				bunSidecar(`
+const cmd = process.argv[2];
+if (cmd === "status") {
+	process.stdout.write(JSON.stringify({ available: true, contextSize: 8192 }) + "\\n");
+	process.exit(0);
+}
+process.stdout.write(JSON.stringify({ text: "yes" }) + "\\n");
+`),
+			);
+			process.env[AFM_CORE_SIDECAR_ENV] = sidecar;
+			const mlxBefore = tinyWorkerUsesMlx();
+			const client = new TinyTitleClient();
+			try {
+				await expect(client.complete("afm-core", "classify this")).resolves.toBe("yes");
+			} finally {
+				await client.terminate();
+			}
+			// afm-core has no MLX export; routing it must not trip the
+			// module-wide mlxUnavailable fallback. (Only exercises the MLX
+			// branch when the device resolves to mlx on Apple silicon.)
+			expect(tinyWorkerUsesMlx()).toBe(mlxBefore);
 		} finally {
 			await fs.promises.rm(dir, { recursive: true, force: true });
 		}
