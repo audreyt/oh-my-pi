@@ -475,13 +475,12 @@ async function postImageEndpointRequest(options: {
 	resolveHeaders?: () => Promise<Record<string, string> | undefined>;
 	fetchImpl: FetchImpl;
 	signal: AbortSignal | undefined;
-	headers?: Record<string, string>;
 }): Promise<string> {
 	return withAuth(
 		options.apiKey,
 		async key => {
 			const configuredHeaders = await options.resolveHeaders?.();
-			const headers: Record<string, string> = { ...configuredHeaders, ...options.headers };
+			const headers: Record<string, string> = { ...configuredHeaders };
 			// Caller-supplied headers under any casing (e.g. a Meta-compatible
 			// proxy via providers.meta.headers) win over the generated
 			// defaults, matching resolveOpenAIRequestSetup. Forcing the
@@ -1790,7 +1789,12 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							url: `${resolveMetaImageBaseUrl(ctx.modelRegistry)}${isEdit ? "/images/edits" : "/images/generations"}`,
 							body: requestBody,
 							apiKey: apiKey.apiKey,
-							headers: ctx.modelRegistry?.getProviderHeaders?.("meta"),
+							resolveHeaders: () => {
+								const requestModel = ctx.modelRegistry!.find("meta", resolvedModel);
+								return requestModel
+									? ctx.modelRegistry!.resolveModelHeaders(requestModel, requestSignal)
+									: ctx.modelRegistry!.getProviderHeaders("meta");
+							},
 							fetchImpl,
 							signal: requestSignal,
 						});

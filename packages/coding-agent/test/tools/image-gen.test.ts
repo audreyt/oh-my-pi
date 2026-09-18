@@ -75,6 +75,9 @@ function createMetaXaiContext(model: Model | undefined, fetchMock: typeof fetch)
 				return undefined;
 			},
 			getProviderBaseUrl: () => undefined,
+			find: () => undefined,
+			getProviderHeaders: async () => undefined,
+			resolveModelHeaders: ModelRegistry.prototype.resolveModelHeaders,
 			getAll: () => [],
 			authStorage: {
 				hasNonEnvCredential: (provider: string) => provider === "xai-oauth",
@@ -1266,6 +1269,8 @@ describe("imageGenTool", () => {
 			modelRegistry: {
 				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
 				getProviderBaseUrl: () => undefined,
+				find: () => undefined,
+				getProviderHeaders: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1325,6 +1330,8 @@ describe("imageGenTool", () => {
 			modelRegistry: {
 				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
 				getProviderBaseUrl: () => undefined,
+				find: () => undefined,
+				getProviderHeaders: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1382,6 +1389,8 @@ describe("imageGenTool", () => {
 				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
 				getProviderBaseUrl: (provider: string) =>
 					provider === "meta" ? "https://custom-proxy.meta.internal/v1/" : undefined,
+				find: () => undefined,
+				getProviderHeaders: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1421,6 +1430,7 @@ describe("imageGenTool", () => {
 					getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "test-meta-key" : undefined),
 					getProviderBaseUrl: (provider: string) => (provider === "meta" ? "https://api.meta.ai/v1" : undefined),
 					getProviderHeaders: () => undefined,
+					find: () => undefined,
 					getAll: () => [],
 					authStorage: { rotateSessionCredential: async () => false },
 					resolver: () => async () => "test-meta-key",
@@ -1471,6 +1481,7 @@ describe("imageGenTool", () => {
 				getProviderBaseUrl: () => undefined,
 				getProviderHeaders: (provider: string) =>
 					provider === "meta" ? { "x-proxy-token": "proxy-123" } : undefined,
+				find: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1516,6 +1527,7 @@ describe("imageGenTool", () => {
 				getProviderBaseUrl: () => undefined,
 				getProviderHeaders: (provider: string) =>
 					provider === "meta" ? { Authorization: "Bearer proxy-credential" } : undefined,
+				find: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1566,6 +1578,7 @@ describe("imageGenTool", () => {
 								"content-type": "application/json",
 							}
 						: undefined,
+				find: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "test-meta-key",
@@ -1614,6 +1627,7 @@ describe("imageGenTool", () => {
 				getApiKeyForProvider: async (provider: string) => (provider === "meta" ? "N/A" : undefined),
 				getProviderBaseUrl: () => undefined,
 				getProviderHeaders: (provider: string) => (provider === "meta" ? { "x-api-key": "proxy-key" } : undefined),
+				find: () => undefined,
 				getAll: () => [],
 				authStorage: { rotateSessionCredential: async () => false },
 				resolver: () => async () => "N/A",
