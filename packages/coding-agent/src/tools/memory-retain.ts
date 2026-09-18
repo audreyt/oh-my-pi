@@ -1,3 +1,4 @@
+import type { MemoryRetainDetails } from "@oh-my-pi/pi-tui/tools/memory";
 import { type } from "@oh-my-pi/omptype";
 import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { isHindsightConfigured, loadHindsightConfig } from "../hindsight/config";
@@ -21,7 +22,7 @@ const memoryRetainSchema = type({
 });
 
 export type MemoryRetainParams = typeof memoryRetainSchema.infer;
-export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
+export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema, MemoryRetainDetails> {
 	readonly name = "retain";
 	readonly approval = "read" as const;
 	readonly label = "Retain";
@@ -40,7 +41,7 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
 		return new MemoryRetainTool(session);
 	}
 
-	async execute(_id: string, params: MemoryRetainParams): Promise<AgentToolResult> {
+	async execute(_id: string, params: MemoryRetainParams): Promise<AgentToolResult<MemoryRetainDetails>> {
 		const backend = this.session.settings.get("memory.backend");
 		if (backend === "mnemon") {
 			const context = {
@@ -48,7 +49,6 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
 				cwd: this.session.settings.getCwd(),
 				session: this.session as never,
 			};
-			const ids: string[] = [];
 			const lines: string[] = [];
 			let stored = 0;
 			for (const item of params.items) {
@@ -67,7 +67,6 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
 				}
 				stored += result.stored;
 				const id = result.ids?.[0];
-				if (id) ids.push(id);
 				const candidateLines = (result.candidates ?? []).slice(0, 6).map(candidate => {
 					const score =
 						candidate.score === undefined
@@ -88,7 +87,7 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
 			const body = [`${stored} ${noun} stored.`, ...lines].filter(Boolean).join("\n");
 			return {
 				content: [{ type: "text", text: body }],
-				details: { count: stored, ids },
+				details: { count: stored },
 			};
 		}
 
