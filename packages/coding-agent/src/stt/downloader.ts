@@ -12,7 +12,7 @@ export interface DownloadProgress {
 }
 
 export interface EnsureOptions {
-	modelName?: string;
+	modelId?: string;
 	language?: string;
 	signal?: AbortSignal;
 	onProgress?: (progress: DownloadProgress) => void;
@@ -79,7 +79,7 @@ export async function isSttModelCached(key: string): Promise<boolean> {
 }
 
 /**
- * Download (or warm from cache) the selected ONNX Whisper model via the speech
+ * Download (or warm from cache) the selected local speech model via the speech
  * worker, resolving once the model is fully present and loaded. Streams real
  * Hub progress with an aggregated integer percent. Rejects if the worker cannot
  * obtain the model. Safe to call non-interactively.
@@ -130,7 +130,7 @@ export async function downloadSttModel(
 // ── Public API ─────────────────────────────────────────────────────
 
 export async function ensureSTTDependencies(options?: EnsureOptions): Promise<void> {
-	const spec = resolveSttModelSpec(options?.modelName);
+	const spec = resolveSttModelSpec(options?.modelId);
 	if (spec.engine === "speech-analyzer") {
 		options?.signal?.throwIfAborted();
 		options?.onProgress?.({ stage: "Preparing system-managed Apple speech recognition" });

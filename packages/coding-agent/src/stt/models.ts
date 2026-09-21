@@ -20,7 +20,7 @@ import type { TinyModelDtype } from "../tiny/dtype";
 export type SttEngine = "transformers" | "sherpa" | "speech-analyzer";
 
 interface SttModelBase {
-	/** Stable key persisted in `stt.modelName`. */
+	/** Stable registry key; worker keys are canonical catalog model ids sent over the worker protocol. */
 	key: string;
 	engine: SttEngine;
 	label: string;
@@ -61,13 +61,14 @@ export interface SpeechAnalyzerSttModelSpec extends SttModelBase {
 export type SttModelSpec = TransformersSttModelSpec | SherpaSttModelSpec | SpeechAnalyzerSttModelSpec;
 
 /**
- * Speech engines exposed by settings. Parakeet remains the cross-platform
- * default; `macos` is an opt-in system engine with no application-managed
- * model download.
+ * Speech models, ordered light → SoTA. Defaults to {@link DEFAULT_STT_MODEL_KEY}.
+ * The Whisper checkpoints run on transformers.js; NVIDIA Parakeet TDT 0.6B v3
+ * runs on sherpa-onnx and leads the Open ASR Leaderboard on accuracy and speed.
+ * `macos` is an opt-in system engine with no application-managed model download.
  */
 export const STT_MODELS = [
 	{
-		key: "fast",
+		key: "whisper-base",
 		engine: "transformers",
 		repo: "onnx-community/whisper-base",
 		dtype: "q8",
@@ -77,7 +78,7 @@ export const STT_MODELS = [
 		sizeHint: "~60 MB",
 	},
 	{
-		key: "balanced",
+		key: "whisper-small",
 		engine: "transformers",
 		repo: "onnx-community/whisper-small",
 		dtype: "q8",
@@ -87,7 +88,7 @@ export const STT_MODELS = [
 		sizeHint: "~190 MB",
 	},
 	{
-		key: "turbo",
+		key: "whisper-large-v3-turbo",
 		engine: "transformers",
 		repo: "onnx-community/whisper-large-v3-turbo",
 		dtype: "q4",
@@ -97,7 +98,7 @@ export const STT_MODELS = [
 		sizeHint: "~600 MB",
 	},
 	{
-		key: "parakeet",
+		key: "parakeet-tdt-0.6b-v3",
 		engine: "sherpa",
 		repo: "csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
 		modelType: "nemo_transducer",
@@ -127,9 +128,9 @@ export const STT_MODELS = [
  * SoTA default — NVIDIA Parakeet TDT 0.6B v3 (sherpa-onnx). Tops the Open ASR
  * Leaderboard on accuracy while decoding ~20× faster than Whisper large-v3.
  */
-export const DEFAULT_STT_MODEL_KEY = "parakeet";
+export const DEFAULT_STT_MODEL_KEY = "parakeet-tdt-0.6b-v3";
 
-/** Literal key union persisted in `stt.modelName`. */
+/** Literal key union of the STT registry, including system engines. */
 export type ConfiguredSttModelKey = (typeof STT_MODELS)[number]["key"];
 
 /** A concrete entry from {@link STT_MODELS}. */
@@ -140,10 +141,10 @@ export type SttModelKey = WorkerSttModel["key"];
 export type WorkerSttModelKey = SttModelKey;
 
 export const STT_MODEL_VALUES = [
-	"fast",
-	"balanced",
-	"turbo",
-	"parakeet",
+	"whisper-base",
+	"whisper-small",
+	"whisper-large-v3-turbo",
+	"parakeet-tdt-0.6b-v3",
 	"macos",
 ] as const satisfies readonly ConfiguredSttModelKey[];
 
@@ -176,10 +177,7 @@ export function getWorkerSttModelSpec(key: string): WorkerSttModel | undefined {
 	return spec?.engine === "speech-analyzer" ? undefined : spec;
 }
 
-/**
- * Resolve a (possibly stale or legacy) `stt.modelName` value onto a concrete
- * spec, falling back to the SoTA default when the key is unknown.
- */
+/** Resolve a catalog model id (or system-engine key), falling back to the SoTA default when unknown. */
 export function resolveSttModelSpec(key: string | undefined): SttModel {
 	return (key !== undefined ? getSttModelSpec(key) : undefined) ?? getSttModelSpec(DEFAULT_STT_MODEL_KEY)!;
 }

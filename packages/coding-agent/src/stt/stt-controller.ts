@@ -1,11 +1,18 @@
+import type { ApiKeyResolver } from "@oh-my-pi/pi-ai";
+import { transcribeAudio } from "@oh-my-pi/pi-ai/transcription";
+import type { Api, Model } from "@oh-my-pi/pi-catalog/types";
 import { AudioCapture } from "@oh-my-pi/pi-natives";
+import type { ModelBrowserRegistry } from "@oh-my-pi/pi-tui/overlays/model-browser";
 import { logger } from "@oh-my-pi/pi-utils";
-import { settings } from "../config/settings";
+import { resolveRoleChain } from "../config/model-resolver";
+import { roleCandidatePool } from "../config/model-roles";
+import { type Settings, settings } from "../config/settings";
 import { appleSpeechClient } from "./apple-speech-client";
 import { type SttStreamHandle, sttClient } from "./asr-client";
 import { downloadSttModel, isSttModelCached } from "./downloader";
-import { resolveSttModelSpec, type SttModelKey } from "./models";
+import { resolveSttModelSpec, type ConfiguredSttModelKey, type SttModelKey } from "./models";
 import { evaluateSubmitTrigger } from "./submit-trigger";
+import { encodePcm16Wav } from "./wav";
 
 export type SttState = "idle" | "recording" | "transcribing";
 
@@ -13,8 +20,6 @@ interface ToggleOptions {
 	showWarning(msg: string): void;
 	showStatus(msg: string): void;
 	onStateChange(state: SttState): void;
-	/** Force a redraw after async edits to the composer (live segment/preview inserts). */
-	requestRender?(): void;
 }
 
 /** The slice of the composer editor the controller drives. */
@@ -33,7 +38,17 @@ interface CaptureHandle {
 
 type CaptureFactory = (onAudio: (error: Error | null, samples: Float32Array) => void) => CaptureHandle;
 
-/** Coordinates native microphone capture with incremental local transcription. */
+interface SttRegistry extends ModelBrowserRegistry {
+	resolver(model: Model<Api>, sessionId?: string): ApiKeyResolver;
+}
+
+export interface STTControllerDependencies {
+	settings: Settings;
+	registry: SttRegistry;
+	getSessionId?: () => string;
+}
+
+/** Coordinates native microphone capture with streaming local or buffered cloud transcription. */
 export class STTController {
 	#state: SttState = "idle";
 	#resolvedDependencyKey: string | null = null;
@@ -42,6 +57,9 @@ export class STTController {
 	#disposed = false;
 	readonly #lifetimeAbort = new AbortController();
 	readonly #createCapture: CaptureFactory;
+	readonly #settings: Settings;
+	readonly #registry: SttRegistry | undefined;
+	readonly #getSessionId: (() => string) | undefined;
 
 	// Live streaming capture.
 	#stream: SttStreamHandle | null = null;
@@ -51,9 +69,30 @@ export class STTController {
 	#streamAbort: AbortController | null = null;
 	#streamUtterance = "";
 
+	// Buffered cloud capture.
+	#cloudModel: Model<Api> | null = null;
+	#cloudAudio: Float32Array[] = [];
+
 	/** Creates a controller; tests may replace the hardware capture boundary. */
-	constructor(createCapture: CaptureFactory = onAudio => new AudioCapture(16_000, onAudio)) {
-		this.#createCapture = createCapture;
+	constructor();
+	constructor(createCapture: CaptureFactory);
+	constructor(dependencies: STTControllerDependencies);
+	constructor(createCapture: CaptureFactory, dependencies: STTControllerDependencies);
+	constructor(
+		createCaptureOrDependencies?: CaptureFactory | STTControllerDependencies,
+		dependencies?: STTControllerDependencies,
+	) {
+		if (typeof createCaptureOrDependencies === "function") {
+			this.#createCapture = createCaptureOrDependencies;
+			this.#settings = dependencies?.settings ?? settings;
+			this.#registry = dependencies?.registry;
+			this.#getSessionId = dependencies?.getSessionId;
+		} else {
+			this.#createCapture = onAudio => new AudioCapture(16_000, onAudio);
+			this.#settings = createCaptureOrDependencies?.settings ?? settings;
+			this.#registry = createCaptureOrDependencies?.registry;
+			this.#getSessionId = createCaptureOrDependencies?.getSessionId;
+		}
 	}
 
 	get state(): SttState {
@@ -94,13 +133,29 @@ export class STTController {
 		}
 	}
 
-	async #ensureDeps(options: ToggleOptions): Promise<boolean> {
-		const spec = resolveSttModelSpec(settings.get("stt.modelName") as string | undefined);
-		const language = settings.get("stt.language") as string | undefined;
+	#resolveModel(): Model<Api> | undefined {
+		if (!this.#registry) return undefined;
+		const pool = roleCandidatePool("dictation", this.#settings, this.#registry);
+		return resolveRoleChain("dictation", this.#settings, pool)[0]?.model;
+	}
+
+	#resolveModelKey(model = this.#resolveModel()): ConfiguredSttModelKey {
+		return resolveSttModelSpec(model?.id).key;
+	}
+
+	async #ensureDeps(
+		options: ToggleOptions,
+		modelKey = this.#resolveModelKey(),
+	): Promise<ConfiguredSttModelKey | null> {
+		const spec = resolveSttModelSpec(modelKey);
+		const language = this.#settings.get("stt.language");
 		// Apple speech assets are locale-specific. A language change must repeat
 		// the native status/prepare probe even when the engine itself is unchanged.
 		const dependencyKey = spec.engine === "speech-analyzer" ? `${spec.key}\0${language?.trim() || "auto"}` : spec.key;
-		if (this.#resolvedDependencyKey === dependencyKey) return true;
+		// Keyed on the resolved role model (plus locale for system engines) rather
+		// than a one-shot flag: changing modelRoles.dictation mid-session re-runs
+		// preflight for the new model.
+		if (this.#resolvedDependencyKey === dependencyKey) return modelKey;
 		try {
 			// Only clear the status line when preflight emitted progress; cached
 			// worker models and already-installed Apple locales emit nothing.
@@ -130,16 +185,16 @@ export class STTController {
 					status(`Downloading speech model ${progress.label} (${progress.percent}%)`),
 				);
 			}
-			if (this.#disposed) return false;
+			if (this.#disposed) return null;
 			if (wroteStatus) options.showStatus("");
 			this.#resolvedDependencyKey = dependencyKey;
-			return true;
+			return modelKey;
 		} catch (err) {
-			if (this.#disposed) return false;
+			if (this.#disposed) return null;
 			const msg = err instanceof Error ? err.message : "Failed to setup STT dependencies";
 			options.showWarning(msg);
 			logger.error("STT dependency setup failed", { error: msg });
-			return false;
+			return null;
 		}
 	}
 
@@ -160,13 +215,152 @@ export class STTController {
 	}
 
 	async #start(editor: Editor, options: ToggleOptions): Promise<void> {
-		if (!(await this.#ensureDeps(options))) return;
-		if (this.#disposed) return;
-		await this.#startStreaming(editor, options);
+		let model = this.#resolveModel();
+		if (model?.api === "openai-transcriptions") {
+			this.#startBuffered(editor, options, model);
+			return;
+		}
+		if (model && model.api !== "local-inference") {
+			options.showWarning(`Unsupported speech-to-text API: ${model.api}`);
+			return;
+		}
+
+		let modelKey = await this.#ensureDeps(options, this.#resolveModelKey(model));
+		if (!modelKey) return;
+		model = this.#resolveModel();
+		if (model?.api === "openai-transcriptions") {
+			this.#startBuffered(editor, options, model);
+			return;
+		}
+		if (model && model.api !== "local-inference") {
+			options.showWarning(`Unsupported speech-to-text API: ${model.api}`);
+			return;
+		}
+		const startModelKey = this.#resolveModelKey(model);
+		if (startModelKey !== modelKey) {
+			modelKey = await this.#ensureDeps(options, startModelKey);
+			if (!modelKey) return;
+		}
+		await this.#startStreaming(editor, options, modelKey);
 	}
 
 	async #stop(options: ToggleOptions): Promise<void> {
-		await this.#stopStreaming(options);
+		if (this.#cloudModel) await this.#stopBuffered(options);
+		else await this.#stopStreaming(options);
+	}
+
+	// ── Buffered cloud transcription ────────────────────────────────
+
+	#startBuffered(editor: Editor, options: ToggleOptions, model: Model<Api>): void {
+		this.#streamEditor = editor;
+		this.#streamCommitted = false;
+		this.#streamUtterance = "";
+		this.#streamAbort = new AbortController();
+		this.#cloudModel = model;
+		this.#cloudAudio = [];
+
+		try {
+			this.#streamRecorder = this.#createCapture((error, samples) => {
+				if (this.#disposed || this.#cloudModel !== model || this.#state !== "recording") return;
+				if (error) {
+					logger.error("Native microphone capture failed", { error: error.message });
+					const recorder = this.#streamRecorder;
+					this.#streamRecorder = null;
+					try {
+						recorder?.stop();
+					} catch (cause) {
+						logger.debug("stt: microphone cleanup failed", {
+							error: cause instanceof Error ? cause.message : String(cause),
+						});
+					}
+					this.#streamAbort?.abort(error);
+					this.#streamEditor?.clearVolatileText();
+					this.#cleanupCloud();
+					this.#setState("idle", options);
+					options.showWarning(error.message);
+					return;
+				}
+				if (samples.length > 0) this.#cloudAudio.push(samples.slice());
+			});
+		} catch (err) {
+			this.#streamAbort?.abort();
+			this.#cleanupCloud();
+			const msg = err instanceof Error ? err.message : "Failed to start microphone capture";
+			options.showWarning(msg);
+			logger.error("STT recording failed to start", { error: msg });
+			return;
+		}
+
+		this.#setState("recording", options);
+		logger.debug("STT buffered recording started", { model: `${model.provider}/${model.id}` });
+	}
+
+	async #stopBuffered(options: ToggleOptions): Promise<void> {
+		const model = this.#cloudModel;
+		const recorder = this.#streamRecorder;
+		const abort = this.#streamAbort;
+		if (!model || !abort || !this.#registry) {
+			this.#cleanupCloud();
+			this.#setState("idle", options);
+			return;
+		}
+
+		this.#setState("transcribing", options);
+		options.showStatus("Transcribing...");
+		try {
+			recorder?.stop();
+		} catch (err) {
+			logger.debug("stt: buffered recorder stop failed", {
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+		this.#streamRecorder = null;
+
+		let failed = false;
+		let finalText = "";
+		try {
+			const language = this.#settings.get("stt.language");
+			const result = await transcribeAudio(
+				model,
+				{
+					audio: encodePcm16Wav(this.#cloudAudio),
+					mimeType: "audio/wav",
+					fileName: "dictation.wav",
+					responseFormat: "json",
+					...(language && { language }),
+				},
+				{
+					apiKey: this.#registry.resolver(model, this.#getSessionId?.()),
+					signal: abort.signal,
+				},
+			);
+			finalText = result.text.trim();
+		} catch (err) {
+			failed = true;
+			if (!this.#disposed) {
+				const msg = err instanceof Error ? err.message : "Transcription failed";
+				options.showWarning(msg);
+				logger.error("STT cloud transcription failed", { error: msg });
+			}
+		}
+		if (this.#disposed) {
+			this.#cleanupCloud();
+			return;
+		}
+
+		this.#finishTranscript(finalText, failed, options);
+		this.#cleanupCloud();
+		this.#setState("idle", options);
+	}
+
+	#cleanupCloud(): void {
+		this.#cloudModel = null;
+		this.#cloudAudio = [];
+		this.#streamRecorder = null;
+		this.#streamEditor = null;
+		this.#streamCommitted = false;
+		this.#streamAbort = null;
+		this.#streamUtterance = "";
 	}
 
 	// ── Live streaming ──────────────────────────────────────────────
@@ -179,10 +373,10 @@ export class STTController {
 		return this.#streamCommitted ? ` ${normalized}` : normalized;
 	}
 
-	async #startStreaming(editor: Editor, options: ToggleOptions): Promise<void> {
+	async #startStreaming(editor: Editor, options: ToggleOptions, modelKey: ConfiguredSttModelKey): Promise<void> {
 		if (this.#disposed) return;
-		const spec = resolveSttModelSpec(settings.get("stt.modelName") as string | undefined);
-		const language = settings.get("stt.language") as string | undefined;
+		const spec = resolveSttModelSpec(modelKey);
+		const language = this.#settings.get("stt.language");
 		this.#streamEditor = editor;
 		this.#streamCommitted = false;
 		this.#streamUtterance = "";
@@ -193,7 +387,6 @@ export class STTController {
 			onPartial: (text: string) => {
 				if (this.#disposed || this.#state !== "recording") return;
 				this.#streamEditor?.setVolatileText(this.#prefixed(text));
-				options.requestRender?.();
 			},
 			onSegment: (text: string) => {
 				if (this.#disposed) return;
@@ -205,7 +398,6 @@ export class STTController {
 				} else {
 					this.#streamEditor?.clearVolatileText();
 				}
-				options.requestRender?.();
 			},
 		};
 		let stream: SttStreamHandle;
@@ -249,7 +441,6 @@ export class STTController {
 					this.#streamAbort?.abort(error);
 					stream.cancel();
 					this.#streamEditor?.clearVolatileText();
-					options.requestRender?.();
 					this.#cleanupStream();
 					this.#setState("idle", options);
 					options.showWarning(error.message);
@@ -304,28 +495,7 @@ export class STTController {
 			this.#cleanupStream();
 			return;
 		}
-		if (!this.#streamCommitted && finalText) {
-			const prefixed = this.#prefixed(finalText);
-			this.#streamEditor?.commitVolatileText(prefixed);
-			this.#streamCommitted = true;
-			this.#streamUtterance = prefixed;
-		} else {
-			this.#streamEditor?.clearVolatileText();
-		}
-		options.requestRender?.();
-		if (!failed) options.showStatus(this.#streamCommitted ? "" : "No speech detected.");
-
-		if (this.#streamCommitted && !failed && this.#streamEditor) {
-			const trigger = settings.get("stt.submitTrigger");
-			const { submit, trimTrailing } = evaluateSubmitTrigger(this.#streamUtterance, trigger);
-			if (trimTrailing > 0) {
-				this.#streamEditor.deleteBeforeCursor(trimTrailing);
-			}
-			if (submit) {
-				this.#streamEditor.submit();
-			}
-		}
-
+		this.#finishTranscript(finalText, failed, options);
 		this.#cleanupStream();
 		this.#setState("idle", options);
 	}
@@ -337,6 +507,29 @@ export class STTController {
 		this.#streamCommitted = false;
 		this.#streamAbort = null;
 		this.#streamUtterance = "";
+	}
+
+	#finishTranscript(finalText: string, failed: boolean, options: ToggleOptions): void {
+		if (!this.#streamCommitted && finalText) {
+			const prefixed = this.#prefixed(finalText);
+			this.#streamEditor?.commitVolatileText(prefixed);
+			this.#streamCommitted = true;
+			this.#streamUtterance = prefixed;
+		} else {
+			this.#streamEditor?.clearVolatileText();
+		}
+		if (!failed) options.showStatus(this.#streamCommitted ? "" : "No speech detected.");
+
+		if (this.#streamCommitted && !failed && this.#streamEditor) {
+			const trigger = this.#settings.get("stt.submitTrigger");
+			const { submit, trimTrailing } = evaluateSubmitTrigger(this.#streamUtterance, trigger);
+			if (trimTrailing > 0) {
+				this.#streamEditor.deleteBeforeCursor(trimTrailing);
+			}
+			if (submit) {
+				this.#streamEditor.submit();
+			}
+		}
 	}
 
 	dispose(): void {
@@ -353,6 +546,8 @@ export class STTController {
 			// best effort cleanup
 		}
 		this.#cleanupStream();
+		this.#cloudModel = null;
+		this.#cloudAudio = [];
 		this.#state = "idle";
 		this.#resolvedDependencyKey = null;
 	}
