@@ -92,10 +92,9 @@ const CREDENTIAL_SCOPED_PROVIDERS = new Set(["devin"]);
  * - `fallback`: only when the provider's authoritative discovery did not succeed.
  * - `empty`: only when no other source produced a row for the provider.
  *
- * xai-oauth is the one projected seed: its rows are curated facts that
- * `buildXaiOAuthStaticSeed` bakes into full Responses specs, and the bundle
- * carries the baked form so `ModelRegistry.#loadModels()` honours a persisted
- * `modelRoles.default = "xai-oauth/<id>"` synchronously at boot.
+ * xai-oauth projects curated chat rows into Responses specs while preserving
+ * runner seed transports. The bundle carries both so configured roles resolve
+ * synchronously before live discovery completes.
  */
 function bundledSeedRows(
 	entry: CompiledProvider,
@@ -250,7 +249,7 @@ async function loadModelsDevData(): Promise<ModelSpec[]> {
 		const data = await fetchWellKnownModels();
 		const models = mapModelsDevToModels(data as Record<string, unknown>, MODELS_DEV_PROVIDER_DESCRIPTORS);
 		models.sort((a, b) => a.id.localeCompare(b.id));
-		console.log(`Loaded ${models.length} tool-capable models from stencil.so`);
+		console.log(`Loaded ${models.length} models from stencil.so`);
 		return models;
 	} catch (error) {
 		console.error("Failed to load stencil.so data:", error);
@@ -664,6 +663,11 @@ async function generateModels() {
 	allModels = allModels.map(model =>
 		model.provider === "github-copilot" ? { ...model, headers: mergeCopilotApiHeaders(model.headers) } : model,
 	);
+	// Exclusion policy applies to upstream/discovery/snapshot rows before the
+	// authored seed-precedence rows land: reviewed seeds (e.g. Meta's seeded
+	// image model, which shares its id with an excluded bare discovery SKU)
+	// outrank exclusion the same way they outrank upstream in dedup.
+	allModels = filterModelsDevCatalogRows(allModels);
 	// Seed rows that outrank upstream: prepended after the snapshot merge and
 	// reference fills, so dedup keeps the authored row and same-id rows from
 	// other providers never overwrite its name/capabilities.
@@ -677,7 +681,6 @@ async function generateModels() {
 	allModels = applyAntigravityPricingFallback(allModels);
 	allModels = applyKimiMaxTokensCap(allModels);
 	allModels = applyFireworksDeepSeekReasoningShape(allModels);
-	allModels = filterModelsDevCatalogRows(allModels);
 	allModels = normalizeAntigravityEndpoint(allModels);
 	// Normalize display names: gateway author prefixes ("OpenAI: …"), alias
 	// markers ("(latest)"), provider attribution ("(Antigravity)"), and
@@ -748,7 +751,7 @@ async function generateModels() {
 
 	console.log(`
 Model Statistics:`);
-	console.log(`  Total tool-capable models: ${totalModels}`);
+	console.log(`  Total models: ${totalModels}`);
 	console.log(`  Reasoning-capable models: ${reasoningModels}`);
 
 	for (const [provider, models] of Object.entries(MODELS)) {
