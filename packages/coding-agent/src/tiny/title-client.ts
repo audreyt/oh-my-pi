@@ -894,7 +894,9 @@ export class TinyTitleClient {
 				this.#emitProgress({
 					modelKey,
 					status: isAfmModelNotReady(error) ? "error" : "ready",
-					...(isAfmModelNotReady(error) ? { name: spec.repo } : { task: "text-generation" as const, model: spec.repo }),
+					...(isAfmModelNotReady(error)
+						? { name: spec.repo }
+						: { task: "text-generation" as const, model: spec.repo }),
 				});
 				return null;
 			}

@@ -4,7 +4,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { appleSpeechClient } from "@oh-my-pi/pi-coding-agent/stt/apple-speech-client";
 import * as asrClient from "@oh-my-pi/pi-coding-agent/stt/asr-client";
 import * as downloader from "@oh-my-pi/pi-coding-agent/stt/downloader";
 import { STTController, type STTControllerDependencies } from "@oh-my-pi/pi-coding-agent/stt/stt-controller";
