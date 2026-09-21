@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { KEENABLE_SEARCH_PUBLIC_URL, KEENABLE_SEARCH_URL } from "@oh-my-pi/pi-coding-agent/web/keenable";
 import {
 	buildRequestBody,
@@ -8,8 +9,12 @@ import {
 } from "@oh-my-pi/pi-coding-agent/web/search/providers/keenable";
 import type { SearchProviderError } from "@oh-my-pi/pi-coding-agent/web/search/types";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
+import { createInMemoryAuthStorage } from "../helpers/agent-session-setup";
 
 const originalKeenableApiKey = process.env.KEENABLE_API_KEY;
+const registryAuthStorage = createInMemoryAuthStorage();
+
+afterAll(() => registryAuthStorage.close());
 
 describe("Keenable web search provider", () => {
 	beforeEach(() => {
@@ -37,10 +42,19 @@ describe("Keenable web search provider", () => {
 		},
 	} as unknown as AuthStorage;
 
+	const { modelRegistry, model: keenableModel } = (() => {
+		const modelRegistry = new ModelRegistry(registryAuthStorage);
+		const model = modelRegistry.find("web", "keenable");
+		if (!model) throw new Error("Expected bundled web/keenable model");
+		return { modelRegistry, model };
+	})();
+
 	function makeParams(query: string) {
 		return {
 			query,
 			authStorage: fakeAuthStorage,
+			model: keenableModel,
+			modelRegistry,
 			systemPrompt: "Keenable test prompt",
 		} as const;
 	}
