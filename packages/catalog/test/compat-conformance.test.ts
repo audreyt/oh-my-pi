@@ -32,11 +32,13 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	// comes from the live /v1/models snapshot; no bundled rows are frozen
 	// into models.json (same shape as charm-hyper).
 	"doubleword",
+	// SingularityAPI reserved-lane roster via singularityApiModelManagerOptions:
+	// the `deepseek-ai/*` lane ids are credential-scoped (one key sees only
+	// its reserved lanes), so no rows are frozen into models.json.
+	"singularityapi",
 	// User-configured models.yml provider pointing at
 	// https://inference-api.nousresearch.com/v1 (NousResearch inference API).
 	"nous",
-	// Hosted image-generation default for Meta Model API (packages/coding-agent/src/tools/image-gen.ts)
-	"meta-image",
 	// Hosted image-generation default for the Gemini backend (same tool)
 	"gemini-image",
 	// Hosted image-generation defaults for the remaining generate_image
