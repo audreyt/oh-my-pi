@@ -5,3 +5,4 @@ export * from "./downloader";
 export * from "./models";
 export * from "./stt-controller";
 export * from "./submit-trigger";
+export * from "./wav";

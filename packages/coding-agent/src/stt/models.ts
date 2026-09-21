@@ -1,31 +1,29 @@
 import type { TinyModelDtype } from "../tiny/dtype";
 
 /**
- * On-device speech-to-text registry. Each stable settings key selects either a
- * bundled worker runtime or Apple's system speech service:
+ * On-device speech-to-text model registry. Each tier maps a stable settings key
+ * onto a locally-runnable ASR model and the engine that loads it:
  *
  * - `transformers` — a transformers.js / ONNX Whisper repo, loaded by the
  *   `@huggingface/transformers` `automatic-speech-recognition` pipeline.
  * - `sherpa` — a sherpa-onnx (Next-gen Kaldi) offline model, loaded by the
  *   native `sherpa-onnx-node` addon. Used for NVIDIA Parakeet, the Open ASR
  *   Leaderboard accuracy/speed leader.
- * - `speech-analyzer` — macOS 26 SpeechAnalyzer + SpeechTranscriber, with
- *   locale assets installed and managed by the operating system.
  *
- * Worker models load lazily in the hard-killed STT subprocess. SpeechAnalyzer
- * runs in its own native sidecar and must never be sent to that worker.
+ * The worker resolves the spec by key and loads the model lazily (kept warm
+ * afterwards). Both engines run inside the hard-killed subprocess worker.
  */
 
-/** Runtime that transcribes a selected speech tier. */
+/** ASR runtime that loads a given tier's model. */
 export type SttEngine = "transformers" | "sherpa" | "speech-analyzer";
 
 interface SttModelBase {
-	/** Stable key persisted in `stt.modelName`. */
+	/** Canonical catalog model id. */
 	key: string;
 	engine: SttEngine;
 	label: string;
 	description: string;
-	/** Approximate storage requirement shown by setup UI. */
+	/** Approximate on-disk download size for the shipped weights (UI hint). */
 	sizeHint: string;
 }
 
@@ -61,13 +59,13 @@ export interface SpeechAnalyzerSttModelSpec extends SttModelBase {
 export type SttModelSpec = TransformersSttModelSpec | SherpaSttModelSpec | SpeechAnalyzerSttModelSpec;
 
 /**
- * Speech engines exposed by settings. Parakeet remains the cross-platform
- * default; `macos` is an opt-in system engine with no application-managed
- * model download.
+ * Speech models, ordered light → SoTA. Defaults to {@link DEFAULT_STT_MODEL_KEY}.
+ * The Whisper checkpoints run on transformers.js; NVIDIA Parakeet TDT 0.6B v3
+ * runs on sherpa-onnx and leads the Open ASR Leaderboard on accuracy and speed.
  */
 export const STT_MODELS = [
 	{
-		key: "fast",
+		key: "whisper-base",
 		engine: "transformers",
 		repo: "onnx-community/whisper-base",
 		dtype: "q8",
@@ -77,7 +75,7 @@ export const STT_MODELS = [
 		sizeHint: "~60 MB",
 	},
 	{
-		key: "balanced",
+		key: "whisper-small",
 		engine: "transformers",
 		repo: "onnx-community/whisper-small",
 		dtype: "q8",
@@ -87,7 +85,7 @@ export const STT_MODELS = [
 		sizeHint: "~190 MB",
 	},
 	{
-		key: "turbo",
+		key: "whisper-large-v3-turbo",
 		engine: "transformers",
 		repo: "onnx-community/whisper-large-v3-turbo",
 		dtype: "q4",
@@ -97,7 +95,7 @@ export const STT_MODELS = [
 		sizeHint: "~600 MB",
 	},
 	{
-		key: "parakeet",
+		key: "parakeet-tdt-0.6b-v3",
 		engine: "sherpa",
 		repo: "csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
 		modelType: "nemo_transducer",
@@ -114,7 +112,7 @@ export const STT_MODELS = [
 		sizeHint: "~680 MB",
 	},
 	{
-		key: "macos",
+		key: "speech-analyzer",
 		engine: "speech-analyzer",
 		label: "Apple SpeechAnalyzer (macOS 26+)",
 		description:
@@ -127,28 +125,35 @@ export const STT_MODELS = [
  * SoTA default — NVIDIA Parakeet TDT 0.6B v3 (sherpa-onnx). Tops the Open ASR
  * Leaderboard on accuracy while decoding ~20× faster than Whisper large-v3.
  */
-export const DEFAULT_STT_MODEL_KEY = "parakeet";
+export const DEFAULT_STT_MODEL_KEY = "parakeet-tdt-0.6b-v3";
 
-/** Literal key union persisted in `stt.modelName`. */
-export type ConfiguredSttModelKey = (typeof STT_MODELS)[number]["key"];
+export type SttModelKey = (typeof STT_MODELS)[number]["key"];
 
-/** A concrete entry from {@link STT_MODELS}. */
+/** A concrete entry from {@link STT_MODELS}; `key` is the literal tier union. */
 export type SttModel = (typeof STT_MODELS)[number];
-export type WorkerSttModel = Exclude<SttModel, { readonly engine: "speech-analyzer" }>;
-/** Model key accepted by the ONNX/sherpa worker protocol. */
-export type SttModelKey = WorkerSttModel["key"];
-export type WorkerSttModelKey = SttModelKey;
 
 export const STT_MODEL_VALUES = [
-	"fast",
-	"balanced",
-	"turbo",
-	"parakeet",
-	"macos",
-] as const satisfies readonly ConfiguredSttModelKey[];
+	"whisper-base",
+	"whisper-small",
+	"whisper-large-v3-turbo",
+	"parakeet-tdt-0.6b-v3",
+	"speech-analyzer",
+] as const satisfies readonly SttModelKey[];
 
-type MissingSttModelValue = Exclude<ConfiguredSttModelKey, (typeof STT_MODEL_VALUES)[number]>;
-type ExtraSttModelValue = Exclude<(typeof STT_MODEL_VALUES)[number], ConfiguredSttModelKey>;
+export function isSpeechAnalyzerModel(spec: SttModelSpec | SttModel | undefined): spec is SpeechAnalyzerSttModelSpec {
+	return spec?.engine === "speech-analyzer";
+}
+
+/** Worker-loadable speech models. SpeechAnalyzer stays in the native sidecar. */
+export type WorkerSttModel = Exclude<SttModel, { readonly engine: "speech-analyzer" }>;
+
+export function getWorkerSttModelSpec(key: string): WorkerSttModel | undefined {
+	const spec = getSttModelSpec(key);
+	return spec && !isSpeechAnalyzerModel(spec) ? spec : undefined;
+}
+
+type MissingSttModelValue = Exclude<SttModelKey, (typeof STT_MODEL_VALUES)[number]>;
+type ExtraSttModelValue = Exclude<(typeof STT_MODEL_VALUES)[number], SttModelKey>;
 const STT_MODEL_VALUES_MATCH_REGISTRY: MissingSttModelValue extends never
 	? ExtraSttModelValue extends never
 		? true
@@ -160,9 +165,9 @@ export const STT_MODEL_OPTIONS = STT_MODELS.map(({ key, label, description }) =>
 	value: key,
 	label,
 	description,
-})) satisfies ReadonlyArray<{ value: ConfiguredSttModelKey; label: string; description: string }>;
+})) satisfies ReadonlyArray<{ value: SttModelKey; label: string; description: string }>;
 
-export function isSttModelKey(value: string): value is ConfiguredSttModelKey {
+export function isSttModelKey(value: string): value is SttModelKey {
 	return STT_MODELS.some(model => model.key === value);
 }
 
@@ -170,25 +175,7 @@ export function getSttModelSpec(key: string): SttModel | undefined {
 	return STT_MODELS.find(model => model.key === key);
 }
 
-/** Return only models accepted by the ONNX/sherpa worker protocol. */
-export function getWorkerSttModelSpec(key: string): WorkerSttModel | undefined {
-	const spec = getSttModelSpec(key);
-	return spec?.engine === "speech-analyzer" ? undefined : spec;
-}
-
-/**
- * Resolve a (possibly stale or legacy) `stt.modelName` value onto a concrete
- * spec, falling back to the SoTA default when the key is unknown.
- */
+/** Resolve a catalog model id, falling back to the SoTA default when unknown. */
 export function resolveSttModelSpec(key: string | undefined): SttModel {
 	return (key !== undefined ? getSttModelSpec(key) : undefined) ?? getSttModelSpec(DEFAULT_STT_MODEL_KEY)!;
-}
-
-/** Resolve a worker model while refusing the native SpeechAnalyzer engine. */
-export function resolveWorkerSttModelSpec(key: string | undefined): WorkerSttModel {
-	const spec = resolveSttModelSpec(key);
-	if (spec.engine === "speech-analyzer") {
-		throw new Error("Apple SpeechAnalyzer is a native STT engine, not a worker model.");
-	}
-	return spec;
 }

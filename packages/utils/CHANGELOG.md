@@ -11,6 +11,17 @@
 
 - Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
 - `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
+## [18.2.7] - 2026-09-21
+
+### Changed
+
+- Mermaid diagrams are now rendered with the native renderer, with output remaining unchanged.
+- PI_TIMING span lines now include their start offset to make unspanned gaps easier to identify.
+
+### Fixed
+
+- Fixed a startup crash when PI_TIMING profiled modules loaded via require() or TypeScript declaration assets.
+
 ## [18.2.5] - 2026-09-17
 
 ### Added
@@ -599,7 +610,7 @@
 
 ### Changed
 
-- Mermaid diagrams are now rendered to ASCII by a first-party vendored renderer (`src/vendor/mermaid-ascii`, derived from the MIT-licensed `beautiful-mermaid`, ASCII pipeline only) with terminal display width measured via `Bun.stringWidth` (grapheme-aware, correct for wide/East-Asian glyphs and emoji). Inline label formatting (HTML formatting tags and markdown emphasis) is now reduced to plain text instead of printed raw.
+- Mermaid diagrams are now rendered to ASCII by a first-party renderer (initially derived from the MIT-licensed `beautiful-mermaid`, ASCII pipeline only) with terminal display width measured via `Bun.stringWidth` (grapheme-aware, correct for wide/East-Asian glyphs and emoji). Inline label formatting (HTML formatting tags and markdown emphasis) is now reduced to plain text instead of printed raw.
 
 ### Removed
 

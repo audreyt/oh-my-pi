@@ -1,10 +1,8 @@
 /**
  * Judge Tool
  *
- * Calibrated typed judgments through the session's judgment backend
- * (`providers.judgmentProvider`): TypeSafe System One when authenticated,
- * otherwise the tiny/smol chat bridge. A network read tool — it judges, it
- * does not generate.
+ * Calibrated typed judgments through the session's `judge` role chain.
+ * A network read tool — it judges, it does not generate.
  */
 import { type } from "@oh-my-pi/omptype";
 import type { JudgmentResult, JudgmentState, Questions } from "@oh-my-pi/pi-ai";
@@ -12,7 +10,6 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import { prompt } from "@oh-my-pi/pi-utils";
 import { resolveJudge } from "../judgment";
 import judgeDescription from "../prompts/tools/judge.md" with { type: "text" };
-import { ONLINE_MEMORY_MODEL_KEY } from "../tiny/models";
 import type { ToolSession } from ".";
 import { throwIfAborted } from "./tool-errors";
 
@@ -75,7 +72,6 @@ export class JudgeTool implements AgentTool<typeof judgeSchema, JudgeToolDetails
 			const judge = resolveJudge({
 				settings: this.session.settings,
 				registry,
-				backend: ONLINE_MEMORY_MODEL_KEY,
 				sessionModel: this.session.getActiveModel?.(),
 			});
 			const result = await judge.judge(

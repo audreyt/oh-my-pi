@@ -39,13 +39,9 @@ import { ensureTinyMlxRuntime, getTinyMlxModelDir, MLX_LM_VERSION } from "./mlx-
 import MLX_SERVER_SCRIPT from "./mlx-server.py" with { type: "text" };
 import {
 	getTinyLocalModelSpec,
-	getTinyTitleModelSpec,
 	isFoundationModelsSpec,
 	isTinyLocalModelKey,
-	isTinyMemoryLocalModelKey,
-	isTinyTitleLocalModelKey,
 	type TinyLocalModelKey,
-	type TinyTitleLocalModelKey,
 	type TinyTitleLocalModelSpec,
 } from "./models";
 import { normalizeGeneratedTitle } from "./text";
@@ -67,7 +63,7 @@ import {
 const TITLE_PREFILL = "<title>";
 const TITLE_CLOSE = "</title>";
 const TITLE_MAX_NEW_TOKENS = 20;
-const MEMORY_COMPLETION_DEFAULT_MAX_NEW_TOKENS = 256;
+const COMPLETION_DEFAULT_MAX_NEW_TOKENS = 256;
 const COMPLETION_MAX_NEW_TOKENS = 1024;
 const TINY_TITLE_SYSTEM_PROMPT = prompt.render(titleSystemPrompt);
 const MLX_IDLE_SECONDS = 15 * 60;
@@ -84,7 +80,7 @@ type WorkerHandle = RefCountedWorkerHandle<TinyWorkerRequest, TinyWorkerResponse
 
 type PendingRequest =
 	| { kind: "title"; modelKey: TinyLocalModelKey; source: string; resolve: (title: string | null) => void }
-	| { kind: "completion"; modelKey: TinyLocalModelKey; resolve: (text: string | null) => void }
+	| { kind: "chat"; modelKey: TinyLocalModelKey; resolve: (text: string | null) => void }
 	| { kind: "load"; modelKey: TinyLocalModelKey; resolve: (result: TinyTitleDownloadResult) => void };
 
 export interface TinyTitleDownloadResult {
@@ -108,9 +104,12 @@ export interface TinyTitleGenerateOptions {
 	systemPrompt?: string;
 }
 
-export interface TinyModelCompletionOptions {
+export interface TinyModelChatOptions {
 	maxTokens?: number;
 	signal?: AbortSignal;
+}
+
+export interface TinyModelCompletionOptions extends TinyModelChatOptions {
 	systemPrompt?: string;
 }
 
@@ -390,9 +389,7 @@ function spawnDetached(
 /** How to start the ONNX worker for `modelKey` with the resolved device/dtype env. @internal */
 export function onnxLaunch(modelKey: TinyLocalModelKey, modelEnv: Record<string, string>): WorkerLaunch {
 	// Foundation-models specs run through the sidecar, so the sidecar
-	// identity joins the launch tag: swapping the binary (or pointing tests
-	// at per-test fakes) retires the old worker instead of reusing it with
-	// a stale binary baked into its environment.
+	// identity joins the launch tag: swapping the binary retires the old worker.
 	const spec = getTinyLocalModelSpec(modelKey);
 	const afmSuffix =
 		spec && isFoundationModelsSpec(spec) ? `|afm:${process.env[AFM_CORE_SIDECAR_ENV]?.trim() || "bundled"}` : "";
@@ -402,9 +399,6 @@ export function onnxLaunch(modelKey: TinyLocalModelKey, modelEnv: Record<string,
 		tag,
 		spawn(endpoint, logPath) {
 			const command = resolveWorkerSpawnCmd(TINY_WORKER_ARG);
-			// The sidecar override is read from process.env at call time, so a
-			// custom sidecar (tests, local builds) must be forwarded
-			// explicitly: worker env is built from the startup snapshot.
 			const sidecar = process.env[AFM_CORE_SIDECAR_ENV]?.trim();
 			const env = inferenceWorkerEnv({
 				...modelEnv,
@@ -571,8 +565,7 @@ export class TinyTitleClient {
 	}
 
 	async #connectDefault(modelKey: TinyLocalModelKey): Promise<WorkerHandle> {
-		// `foundation-models` (AFM) is served by the ONNX worker process via the
-		// sidecar — never by the MLX Python worker, which needs an `mlxRepo`.
+		// Foundation Models are served by the ONNX worker via the sidecar, never MLX.
 		const spec = getTinyLocalModelSpec(modelKey);
 		if (spec && isFoundationModelsSpec(spec)) {
 			return connectTinyWorker(onnxLaunch(modelKey, tinyModelEnv()), modelKey);
@@ -606,8 +599,8 @@ export class TinyTitleClient {
 	 * online / non-local keys and for models already marked failed.
 	 */
 	prewarm(modelKey: string): void {
-		if (!isTinyTitleLocalModelKey(modelKey) || this.#failedModels.has(modelKey)) return;
-		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey))) return;
+		if (!isTinyLocalModelKey(modelKey) || this.#failedModels.has(modelKey)) return;
+		if (isFoundationModelsSpec(getTinyLocalModelSpec(modelKey))) return;
 		try {
 			this.#ensureWorker(modelKey).handle.send({ type: "ping", id: String(++this.#nextRequestId) });
 		} catch (error) {
@@ -626,14 +619,16 @@ export class TinyTitleClient {
 		optionsOrSignal?: AbortSignal | TinyTitleGenerateOptions,
 	): Promise<string | null> {
 		const options = normalizeTinyTitleGenerateOptions(optionsOrSignal);
-		if (!isTinyTitleLocalModelKey(modelKey)) return null;
+		if (!isTinyLocalModelKey(modelKey)) return null;
 		if (options.signal?.aborted) return null;
 		if (this.#failedModels.has(modelKey)) {
-			this.#emitProgress({ modelKey, status: "error", name: getTinyTitleModelSpec(modelKey).repo });
+			const failedSpec = getTinyLocalModelSpec(modelKey);
+			if (failedSpec) this.#emitProgress({ modelKey, status: "error", name: failedSpec.repo });
 			return null;
 		}
-		if (isFoundationModelsSpec(getTinyTitleModelSpec(modelKey)))
+		if (isFoundationModelsSpec(getTinyLocalModelSpec(modelKey))) {
 			return this.#generateFoundationModels(modelKey, message, options.systemPrompt, options.signal);
+		}
 		const { promise, resolve } = Promise.withResolvers<string | null>();
 		const request: TinyWorkerRequest = {
 			type: "chat",
@@ -648,24 +643,33 @@ export class TinyTitleClient {
 		);
 	}
 
+	async chat(
+		modelKey: string,
+		messages: readonly TinyChatMessage[],
+		options: TinyModelChatOptions = {},
+	): Promise<string | null> {
+		if (!isTinyLocalModelKey(modelKey)) return null;
+		if (options.signal?.aborted || this.#failedModels.has(modelKey)) return null;
+		if (isFoundationModelsSpec(getTinyLocalModelSpec(modelKey))) {
+			return this.#completeFoundationModels(modelKey, messages, options.maxTokens, options.signal);
+		}
+		const requested = options.maxTokens ?? COMPLETION_DEFAULT_MAX_NEW_TOKENS;
+		const { promise, resolve } = Promise.withResolvers<string | null>();
+		const request: TinyWorkerRequest = {
+			type: "chat",
+			id: String(++this.#nextRequestId),
+			messages,
+			maxNewTokens: Math.min(Math.max(1, requested), COMPLETION_MAX_NEW_TOKENS),
+		};
+		return this.#run(request, { kind: "chat", modelKey, resolve }, promise, options.signal, () => resolve(null));
+	}
+
 	async complete(
 		modelKey: string,
 		promptText: string,
 		options: TinyModelCompletionOptions = {},
 	): Promise<string | null> {
-		if (!isTinyMemoryLocalModelKey(modelKey)) return null;
-		if (options.signal?.aborted || this.#failedModels.has(modelKey)) return null;
-		const requested = options.maxTokens ?? MEMORY_COMPLETION_DEFAULT_MAX_NEW_TOKENS;
-		const { promise, resolve } = Promise.withResolvers<string | null>();
-		const request: TinyWorkerRequest = {
-			type: "chat",
-			id: String(++this.#nextRequestId),
-			messages: buildCompletionMessages(promptText, options.systemPrompt),
-			maxNewTokens: Math.min(Math.max(1, requested), COMPLETION_MAX_NEW_TOKENS),
-		};
-		return this.#run(request, { kind: "completion", modelKey, resolve }, promise, options.signal, () =>
-			resolve(null),
-		);
+		return this.chat(modelKey, buildCompletionMessages(promptText, options.systemPrompt), options);
 	}
 
 	async downloadModel(modelKey: string, options: TinyTitleDownloadOptions = {}): Promise<TinyTitleDownloadResult> {
@@ -673,12 +677,13 @@ export class TinyTitleClient {
 		if (options.signal?.aborted) return { ok: false };
 		const unsubscribe = options.onProgress ? this.onProgress(options.onProgress) : undefined;
 		const downloadSpec = getTinyLocalModelSpec(modelKey);
-		if (downloadSpec && isFoundationModelsSpec(downloadSpec))
+		if (downloadSpec && isFoundationModelsSpec(downloadSpec)) {
 			try {
 				return await this.#probeFoundationModels(modelKey, downloadSpec, options.signal);
 			} finally {
 				unsubscribe?.();
 			}
+		}
 		try {
 			const { promise, resolve } = Promise.withResolvers<TinyTitleDownloadResult>();
 			const request: TinyWorkerRequest = { type: "load", id: String(++this.#nextRequestId) };
@@ -804,26 +809,65 @@ export class TinyTitleClient {
 		}
 		if (message.type === "text") {
 			if (pending.kind === "title") pending.resolve(extractTinyTitle(message.text, pending.source));
-			else if (pending.kind === "completion") pending.resolve(message.text.trim() || null);
+			else if (pending.kind === "chat") pending.resolve(message.text.trim() || null);
 			return;
 		}
 		if (pending.kind === "load") pending.resolve({ ok: true });
 	}
 
-	/**
-	 * Title generation through Apple Foundation Models: no worker to spawn,
-	 * so this runs inline and mirrors the worker error contract (null plus a
-	 * progress error, never a rejection). Transient states (`modelNotReady`,
-	 * request-scoped refusals) stay recoverable; only terminal availability
-	 * failures disable AFM until restart.
-	 */
 	async #generateFoundationModels(
-		modelKey: TinyTitleLocalModelKey,
+		modelKey: TinyLocalModelKey,
 		message: string,
-		systemPrompt?: string,
-		signal?: AbortSignal,
+		systemPrompt: string | undefined,
+		signal: AbortSignal | undefined,
 	): Promise<string | null> {
-		const spec = getTinyTitleModelSpec(modelKey);
+		const spec = getTinyLocalModelSpec(modelKey);
+		if (!spec) return null;
+		return this.#runFoundationModels(modelKey, spec, signal, {
+			instructions: systemPrompt?.trim() || TINY_TITLE_SYSTEM_PROMPT,
+			prompt: formatTitleUserMessage(message),
+			maxTokens: TITLE_MAX_NEW_TOKENS,
+			finish: text => extractTinyTitle(text, message),
+		});
+	}
+
+	async #completeFoundationModels(
+		modelKey: TinyLocalModelKey,
+		messages: readonly TinyChatMessage[],
+		maxTokens: number | undefined,
+		signal: AbortSignal | undefined,
+	): Promise<string | null> {
+		const spec = getTinyLocalModelSpec(modelKey);
+		if (!spec) return null;
+		const instructions = messages
+			.filter(entry => entry.role === "system")
+			.map(entry => entry.content)
+			.join("\n")
+			.trim();
+		const prompt = messages
+			.filter(entry => entry.role !== "system")
+			.map(entry => entry.content)
+			.join("\n")
+			.trim();
+		return this.#runFoundationModels(modelKey, spec, signal, {
+			...(instructions ? { instructions } : {}),
+			prompt,
+			maxTokens,
+			finish: text => text.trim() || null,
+		});
+	}
+
+	async #runFoundationModels(
+		modelKey: TinyLocalModelKey,
+		spec: TinyTitleLocalModelSpec,
+		signal: AbortSignal | undefined,
+		request: {
+			instructions?: string;
+			prompt: string;
+			maxTokens?: number;
+			finish: (text: string) => string | null;
+		},
+	): Promise<string | null> {
 		const blocked = foundationModelsUnavailableReason(spec);
 		if (blocked) {
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
@@ -834,24 +878,24 @@ export class TinyTitleClient {
 		this.#emitProgress({ modelKey, status: "initiate", name: spec.repo });
 		try {
 			const text = await completeAfmCore({
-				instructions: systemPrompt?.trim() || TINY_TITLE_SYSTEM_PROMPT,
-				prompt: formatTitleUserMessage(message),
-				maxTokens: TITLE_MAX_NEW_TOKENS,
+				instructions: request.instructions,
+				prompt: request.prompt,
+				maxTokens: request.maxTokens,
 				signal,
 			});
 			this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
-			return extractTinyTitle(text, message);
+			return request.finish(text);
 		} catch (error) {
 			if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
 				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
 				return null;
 			}
-			if (isAfmModelNotReady(error)) {
-				this.#emitProgress({ modelKey, status: "error", name: spec.repo });
-				return null;
-			}
-			if (isAfmRequestScopedFailure(error)) {
-				this.#emitProgress({ modelKey, status: "ready", task: "text-generation", model: spec.repo });
+			if (isAfmModelNotReady(error) || isAfmRequestScopedFailure(error)) {
+				this.#emitProgress({
+					modelKey,
+					status: isAfmModelNotReady(error) ? "error" : "ready",
+					...(isAfmModelNotReady(error) ? { name: spec.repo } : { task: "text-generation" as const, model: spec.repo }),
+				});
 				return null;
 			}
 			this.#emitProgress({ modelKey, status: "error", name: spec.repo });
@@ -860,10 +904,7 @@ export class TinyTitleClient {
 		}
 	}
 
-	/**
-	 * `download` for a Foundation Models spec is a readiness probe: there are
-	 * no weights to fetch, so resolve from `probeAfmCore` instead of `load`.
-	 */
+	/** `download` for Foundation Models is a readiness probe; there are no weights to fetch. */
 	async #probeFoundationModels(
 		modelKey: TinyLocalModelKey,
 		spec: TinyTitleLocalModelSpec,
@@ -938,7 +979,7 @@ export class TinyTitleClient {
 
 export const tinyTitleClient = new TinyTitleClient();
 
-/** Alias for the shared tiny-model worker client (titles + memory completions). */
+/** Alias for the shared tiny-model worker client (titles + generic chat completions). */
 export const tinyModelClient = tinyTitleClient;
 
 /** Drop this process's worker connections; the workers themselves keep serving others until idle. */

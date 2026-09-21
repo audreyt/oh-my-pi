@@ -4,7 +4,7 @@ import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils";
 import { appleSpeechClient } from "./apple-speech-client";
 import { sttClient } from "./asr-client";
 import type { SttProgressStatus } from "./asr-protocol";
-import { resolveSttModelSpec, resolveWorkerSttModelSpec } from "./models";
+import { isSpeechAnalyzerModel, resolveSttModelSpec } from "./models";
 
 export interface DownloadProgress {
 	stage: string;
@@ -12,7 +12,7 @@ export interface DownloadProgress {
 }
 
 export interface EnsureOptions {
-	modelName?: string;
+	modelId?: string;
 	language?: string;
 	signal?: AbortSignal;
 	onProgress?: (progress: DownloadProgress) => void;
@@ -48,7 +48,8 @@ export interface SttDownloadProgress {
  * present (`.part` sidecars from an interrupted fetch are ignored).
  */
 export async function isSttModelCached(key: string): Promise<boolean> {
-	const spec = resolveWorkerSttModelSpec(key);
+	const spec = resolveSttModelSpec(key);
+	if (isSpeechAnalyzerModel(spec)) return true;
 	const repoDir = path.join(getTinyModelsCacheDir(), spec.repo);
 	if (spec.engine === "sherpa") {
 		try {
@@ -79,7 +80,7 @@ export async function isSttModelCached(key: string): Promise<boolean> {
 }
 
 /**
- * Download (or warm from cache) the selected ONNX Whisper model via the speech
+ * Download (or warm from cache) the selected local speech model via the speech
  * worker, resolving once the model is fully present and loaded. Streams real
  * Hub progress with an aggregated integer percent. Rejects if the worker cannot
  * obtain the model. Safe to call non-interactively.
@@ -89,7 +90,10 @@ export async function downloadSttModel(
 	onProgress?: (progress: SttDownloadProgress) => void,
 	options?: { signal?: AbortSignal },
 ): Promise<void> {
-	const spec = resolveWorkerSttModelSpec(key);
+	const spec = resolveSttModelSpec(key);
+	if (isSpeechAnalyzerModel(spec)) {
+		throw new Error("Apple SpeechAnalyzer is a system-managed engine and has no model download.");
+	}
 	const files = new Map<string, { loaded: number; total: number }>();
 	const result = await sttClient.downloadModel(spec.key, {
 		signal: options?.signal,
@@ -130,8 +134,8 @@ export async function downloadSttModel(
 // ── Public API ─────────────────────────────────────────────────────
 
 export async function ensureSTTDependencies(options?: EnsureOptions): Promise<void> {
-	const spec = resolveSttModelSpec(options?.modelName);
-	if (spec.engine === "speech-analyzer") {
+	const spec = resolveSttModelSpec(options?.modelId);
+	if (isSpeechAnalyzerModel(spec)) {
 		options?.signal?.throwIfAborted();
 		options?.onProgress?.({ stage: "Preparing system-managed Apple speech recognition" });
 		const status = await appleSpeechClient.prepare(options?.language, options?.signal);

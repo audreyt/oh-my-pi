@@ -3,6 +3,9 @@
 provider "meta" {
 	default-model "muse-spark-1.1"
 	env "MODEL_API_KEY" "META_API_KEY"
+	kind-apis {
+		image "openai-images"
+	}
 	discovery label="Meta Model API"
 
 	// Muse Spark revisions served by Meta's first-party Responses API. Meta's
@@ -64,6 +67,17 @@ provider "meta" {
 			supports-reasoning-effort #true
 			include-encrypted-reasoning #true
 		}
+		model "muse-image-1.0" name="Muse Image 1.0" api="openai-images" {
+			reasoning #false
+			input "text" "image"
+			cost input=0 output=0 cache-read=0 cache-write=0
+			limits
+			supports-tools #false
+		}
+	}
+
+	models "muse-image-1.0" {
+		kind "image"
 	}
 
 	include-encrypted-reasoning #true

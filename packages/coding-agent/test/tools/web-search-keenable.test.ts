@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import type { Api, AuthStorage, Model } from "@oh-my-pi/pi-ai";
+import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { KEENABLE_SEARCH_PUBLIC_URL, KEENABLE_SEARCH_URL } from "@oh-my-pi/pi-coding-agent/web/keenable";
 import {
 	buildRequestBody,
@@ -42,7 +43,9 @@ describe("Keenable web search provider", () => {
 			query,
 			authStorage: fakeAuthStorage,
 			systemPrompt: "Keenable test prompt",
-		} as const;
+			model: { id: "keenable", provider: "web", api: "web-search" } as Model<Api>,
+			modelRegistry: { authStorage: fakeAuthStorage } as ModelRegistry,
+		};
 	}
 
 	it("keeps a rotated credential across the recency fallback", async () => {
