@@ -6,6 +6,10 @@
 - Added the built-in `judge` tool for calibrated typed judgments (noul/choice/score) through the session's judgment backend (`providers.judgmentProvider`), enabled by `judge.enabled`.
 - Added opt-in `skills.suggestion` setting: when enabled, each user turn makes one judgment-backend call that may inject a one-line skill suggestion into the turn context.
 
+### Added
+
+- `find` (and `omp find`) accepts an `omp://` docs scope: `omp://` searches every embedded harness doc and `omp://<file>.md` searches one, reporting hits as canonical `omp://` URLs that `read` opens directly, including with `:start-end` selectors ([#12758](https://github.com/can1357/oh-my-pi/pull/12758) by [@H4vC](https://github.com/H4vC)).
+
 ## [18.2.8] - 2026-09-21
 
 ### Added
