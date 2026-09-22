@@ -16,6 +16,10 @@
 - Added host `link` for `memory.backend: mnemon` (`id1`/`id2`/`type`/`weight`, including `supersedes`). `retain` now returns the new insight id and link candidates so the graph loop can close without dropping to the CLI. `supersedes` falls back to `causal` on CLIs that reject the fifth edge type.
 - Added host `related` and `forget` for `memory.backend: mnemon`. `retain` now accepts `category`, `importance`, and `entities` instead of hardcoding `context`/`3`. `recall` accepts optional `limit`.
 
+### Added
+
+- Added opt-in Apple Foundation Models (`afm-core`) session title generation for Darwin hosts ([#9683](https://github.com/can1357/oh-my-pi/pull/9683)).
+
 ### Changed
 
 - Updated server-side fallback documentation and logic to target claude-opus-5-5
@@ -27,6 +31,14 @@
 - Fixed `memory.backend: mnemon` host tools so `link` / `related` / `forget` mount and unmount on backend switch, `link` is write-tier, secret scans cover every persisted save field, and abort/timeout waits for the CLI child to exit.
 - Fixed an issue where explicitly passing an importance of `1` to mnemon was incorrectly scaled to `5`
 - Fixed `mnemon` executable resolution to fail loudly if an explicitly configured path does not exist, instead of silently falling back to a binary found on `PATH`
+- Cancelled `afm-core` title generation and readiness probes now kill the sidecar process instead of leaving it running.
+- `afm-core` now reports `unsupported_os` on macOS earlier than 26 instead of launching a 26-target sidecar that dyld rejects.
+- Title generation now emits a terminal progress event when a previously failed local tiny model is skipped, so the download UI can unsubscribe.
+- A contended `afm-core` sidecar compile lock no longer disables title generation for the rest of the process.
+- `afm-core` now validates its sidecar cache under the compile lock so a concurrent install cannot return a mismatched helper.
+- Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
+- `afm-core` sidecars use build- and architecture-specific cache paths, preventing concurrent installs or interrupted upgrades from replacing a helper another process is about to launch.
+- Transient `afm-core` startup, process, and response errors no longer disable subsequent title requests.
 
 ## [18.2.9] - 2026-09-22
 

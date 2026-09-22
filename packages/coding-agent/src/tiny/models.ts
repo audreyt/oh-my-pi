@@ -10,7 +10,7 @@ export interface TinyTitleLocalModelSpec {
 	/** ONNX export loaded by transformers.js on every platform. */
 	repo: string;
 	dtype: "q4";
-	/** Pre-quantized MLX export loaded by mlx-lm when `PI_TINY_DEVICE=mlx`. Absent for Apple Foundation Models. */
+	/** Pre-quantized MLX export loaded by mlx-lm when `PI_TINY_DEVICE=mlx`. Absent for non-weight engines (Apple Foundation Models). */
 	mlxRepo?: string;
 	label: string;
 	description: string;
@@ -86,8 +86,6 @@ export function isFoundationModelsSpec(
 
 /** Recommended local model for memory tasks when none is named. */
 export const DEFAULT_MEMORY_LOCAL_MODEL_KEY = "lfm2-1.2b";
-/** Retired settings sentinel kept for callers that still name the online memory path. */
-export const ONLINE_MEMORY_MODEL_KEY = "online";
 
 /**
  * Local models for Mnemopi memory tasks (fact extraction + consolidation).
@@ -157,7 +155,6 @@ export const TINY_MEMORY_LOCAL_MODELS = [
 		contextNote:
 			"Darwin only. Session context is SystemLanguageModel.contextSize (4096 on 26.x, live _contextSize on 27+; 8192 for AFM 3 on this class of Mac). Fail closed when Apple Intelligence is off or the model is not ready.",
 		unsupportedReason: process.platform === "darwin" ? undefined : "Apple Foundation Models is macOS-only",
-		onnxUnsupportedReason: "Apple Foundation Models uses the SystemLanguageModel engine, not ONNX",
 	},
 ] as const satisfies readonly TinyTitleLocalModelSpec[];
 

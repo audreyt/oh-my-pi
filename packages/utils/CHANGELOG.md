@@ -11,6 +11,7 @@
 
 - Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
 - `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
+
 ## [18.2.7] - 2026-09-21
 
 ### Changed

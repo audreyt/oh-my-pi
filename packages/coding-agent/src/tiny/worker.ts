@@ -24,13 +24,13 @@ import {
 	sendProgress,
 	type TransformersRuntimeMetadata,
 } from "../subprocess/worker-runtime";
+import { renderTextChatTemplate } from "./completion-prompt";
 import {
 	completeAfmCore,
 	foundationModelsUnavailableReason,
 	isAfmRequestScopedFailure,
 	probeAfmCore,
 } from "./apple-fm";
-import { renderTextChatTemplate } from "./completion-prompt";
 import {
 	resolveTinyModelDevicePreference,
 	type TinyModelDevicePreference,
@@ -80,7 +80,7 @@ export interface TransformersRuntime extends TransformersRuntimeMetadata {
 }
 
 /** Minimal outbound surface the shared progress/runtime helpers need for one request. */
-export interface ReplyTransport {
+interface ReplyTransport {
 	send(message: TinyWorkerResponse): void;
 }
 
@@ -202,12 +202,6 @@ class OnnxModel {
 	/** Resident pipeline, loading (with progress for `requestId`) on first use. */
 	pipeline(reply: ReplyTransport, requestId: string): Promise<TextGenerationPipeline> {
 		if (this.#pipeline) return this.#pipeline;
-		if (isFoundationModelsSpec(this.#spec)) {
-			const blocked = foundationModelsUnavailableReason(this.#spec);
-			return Promise.reject(
-				new Error(`${this.#modelKey} is unavailable: ${blocked ?? "use the Foundation Models path"}`),
-			);
-		}
 		if (this.#spec.onnxUnsupportedReason) {
 			return Promise.reject(new Error(`${this.#modelKey} is unavailable: ${this.#spec.onnxUnsupportedReason}`));
 		}
@@ -315,13 +309,19 @@ class FoundationModelsModel {
 	}
 
 	async chat(request: Extract<TinyWorkerRequest, { type: "chat" }>, reply: ReplyTransport): Promise<string> {
-		await this.pipeline(reply, request.id);
 		const instructions = request.messages.find(message => message.role === "system")?.content ?? "";
 		const prompt = request.messages
 			.filter(message => message.role === "user")
 			.map(message => message.content)
 			.join("\n");
 		try {
+			// Probe inside the request scope: a transient probe failure
+			// (modelNotReady, unclassified transport) returns empty like a
+			// guardrail failure instead of failing the worker, so later
+			// completions re-probe and recover. Terminal availability
+			// faults still throw and fail closed. (The load path keeps
+			// throwing: download must report probe failures.)
+			await this.pipeline(reply, request.id);
 			// Bound AFM completion tokens (1–1024) like the ONNX path caps
 			// generation length; the sidecar has no safe default of its own.
 			const maxTokens = Math.min(Math.max(1, request.maxNewTokens), 1024);
