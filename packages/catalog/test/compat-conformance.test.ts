@@ -17,37 +17,28 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	"synthetic-search",
 	"llama.cpp",
 	"lm-studio",
-	// User-configured LiteLLM proxy (models.yml provider or litellm auth flow;
-	// PROXY_OPENAI_COMPAT_PROVIDERS) that forwards upstream chat templates.
 	"litellm",
 	"vllm",
 	"openai-codex-device",
-	// Hosted image-generation default for Meta Model API (packages/coding-agent/src/tools/image-gen.ts)
-	"meta-image",
 	// Public gateway discovery via charmHyperModelManagerOptions: every row,
 	// including its tariff and effort ladder, comes from the live /v1/models
 	// snapshot, so no bundled rows are frozen into models.json.
 	"charm-hyper",
-	// Public gateway discovery via doublewordModelManagerOptions: every row
-	// comes from the live /v1/models snapshot; no bundled rows are frozen
-	// into models.json (same shape as charm-hyper).
-	"doubleword",
 	// Both SingularityAPI rosters are live and credential-scoped (one key sees
 	// only its own product's models — the pay-as-you-go catalog or the reserved
 	// lanes), so no rows are frozen into models.json.
 	"singularityapi-dev",
 	"singularityapi-tech",
+	// User-configured LiteLLM proxy (models.yml provider or litellm auth flow;
+	// PROXY_OPENAI_COMPAT_PROVIDERS) that forwards upstream chat templates.
+	"litellm",
 	// User-configured models.yml provider pointing at
 	// https://inference-api.nousresearch.com/v1 (NousResearch inference API).
 	"nous",
-	// Hosted image-generation default for the Gemini backend (same tool)
-	"gemini-image",
-	// Hosted image-generation defaults for the remaining generate_image
-	// backends (same tool; resolved via hostedDefaultModel)
-	"antigravity-image",
-	"openrouter-image",
-	"xai-image",
-	"deepinfra-image",
+	// Public gateway discovery via doublewordModelManagerOptions: every row
+	// comes from the live /v1/models snapshot; no bundled rows are frozen
+	// into models.json (same shape as charm-hyper).
+	"doubleword",
 ]);
 
 // Hosted image-generation defaults (`<backend>-image`) are referenced from

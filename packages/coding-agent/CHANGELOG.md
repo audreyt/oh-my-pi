@@ -32,8 +32,13 @@
 
 - Added Meta Model API as an image generation and editing provider (`meta`, defaulting to Muse Image 1.0 via `MODEL_API_KEY` or `META_API_KEY`).
 
+### Added
+
+- Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Serving defaults to async `flex`; `/fast` requests realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+
 ### Changed
 
+- `tier.openai`/`tier.anthropic`/`tier.google` now default to `provider` (use the model's own default tier when its rule declares one); `none` is an explicit omit that also suppresses that default, so Doubleword's async `flex` applies unless you pick `none` or `/fast` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 - Updated server-side fallback documentation and logic to target claude-opus-5-5
 - Added support for claude-opus-5-5 to model priority registry
 
@@ -53,6 +58,7 @@
 - Transient `afm-core` startup, process, and response errors no longer disable subsequent title requests.
 - Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
 - Keenable recency retries now share the original search timeout and retain rotated credentials instead of retrying a rejected key.
+- Extensions can set the `none` service-tier sentinel via `setServiceTier`, opting Doubleword sessions back onto standard processing instead of throwing ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.2.9] - 2026-09-22
 
