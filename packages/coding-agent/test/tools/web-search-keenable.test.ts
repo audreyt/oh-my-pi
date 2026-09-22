@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { Api, AuthStorage, Model } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { KEENABLE_SEARCH_PUBLIC_URL, KEENABLE_SEARCH_URL } from "@oh-my-pi/pi-coding-agent/web/keenable";
 import {
 	buildRequestBody,
@@ -9,8 +9,12 @@ import {
 } from "@oh-my-pi/pi-coding-agent/web/search/providers/keenable";
 import type { SearchProviderError } from "@oh-my-pi/pi-coding-agent/web/search/types";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
+import { createInMemoryAuthStorage } from "../helpers/agent-session-setup";
 
 const originalKeenableApiKey = process.env.KEENABLE_API_KEY;
+const registryAuthStorage = createInMemoryAuthStorage();
+
+afterAll(() => registryAuthStorage.close());
 
 describe("Keenable web search provider", () => {
 	beforeEach(() => {
@@ -38,14 +42,21 @@ describe("Keenable web search provider", () => {
 		},
 	} as unknown as AuthStorage;
 
+	const { modelRegistry, model: keenableModel } = (() => {
+		const modelRegistry = new ModelRegistry(registryAuthStorage);
+		const model = modelRegistry.find("web", "keenable");
+		if (!model) throw new Error("Expected bundled web/keenable model");
+		return { modelRegistry, model };
+	})();
+
 	function makeParams(query: string) {
 		return {
 			query,
 			authStorage: fakeAuthStorage,
+			model: keenableModel,
+			modelRegistry,
 			systemPrompt: "Keenable test prompt",
-			model: { id: "keenable", provider: "web", api: "web-search" } as Model<Api>,
-			modelRegistry: { authStorage: fakeAuthStorage } as ModelRegistry,
-		};
+		} as const;
 	}
 
 	it("keeps a rotated credential across the recency fallback", async () => {
@@ -226,6 +237,40 @@ describe("Keenable web search provider", () => {
 		expect(response.sources.map(source => source.snippet)).toEqual([
 			"line one line two line three",
 			"desc with breaks",
+		]);
+	});
+
+	it("rejects result URLs with embedded tabs, newlines, or non-HTTP schemes", async () => {
+		const fetchMock = async (): Promise<Response> =>
+			new Response(
+				JSON.stringify({
+					query: "url validation",
+					results: [
+						{ title: "Newline", url: "https://example.com/\nInjected text" },
+						{ title: "Tab", url: "https://example.com/\tTabbed" },
+						{ title: "FTP", url: "ftp://example.com/file" },
+						{ title: "Relative", url: "/relative/path" },
+						{ title: "Valid", url: "https://example.com/valid" },
+					],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+
+		const response = await searchKeenable({
+			...makeParams("url validation"),
+			numSearchResults: 5,
+			fetch: fetchMock,
+		});
+
+		// Malformed URLs would corrupt the framed result and the title fallback.
+		expect(response.sources).toEqual([
+			{
+				title: "Valid",
+				url: "https://example.com/valid",
+				snippet: undefined,
+				publishedDate: undefined,
+				ageSeconds: undefined,
+			},
 		]);
 	});
 

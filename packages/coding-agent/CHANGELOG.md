@@ -24,6 +24,10 @@
 
 - Added opt-in Apple SpeechAnalyzer speech-to-text on macOS 26+, with live partials and system-managed locale assets ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
 
+### Added
+
+- Added Keenable as a first-class web search provider and fetch reader (`KEENABLE_API_KEY` or `/login keenable`; explicit selection can use the public keyless API) ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
+
 ### Changed
 
 - Updated server-side fallback documentation and logic to target claude-opus-5-5
@@ -43,6 +47,8 @@
 - Localized `afm-core` generation errors no longer disable later title requests merely because they mention unavailability.
 - `afm-core` sidecars use build- and architecture-specific cache paths, preventing concurrent installs or interrupted upgrades from replacing a helper another process is about to launch.
 - Transient `afm-core` startup, process, and response errors no longer disable subsequent title requests.
+- Keenable searches now preserve paths and excluded sites in `site:` constraints instead of broadening them to the entire host.
+- Keenable recency retries now share the original search timeout and retain rotated credentials instead of retrying a rejected key.
 
 ## [18.2.9] - 2026-09-22
 

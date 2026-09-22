@@ -13,8 +13,8 @@ import {
 	withAuth,
 } from "@oh-my-pi/pi-ai";
 import { asRecord } from "@oh-my-pi/pi-utils";
-import { keenableAuthHeaders, keenableSearchUrl } from "../../../web/keenable";
 import type { SearchResponse, SearchSource } from "@oh-my-pi/pi-tui/tools/web-search";
+import { keenableAuthHeaders, keenableSearchUrl } from "../../../web/keenable";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatQuery, parseSearchQuery } from "../query";
 import { clampNumResults, dateToAgeSeconds } from "../utils";
@@ -76,6 +76,20 @@ function snippetOf(hit: KeenableSearchHit): string | undefined {
 	return normalizeSearchText(hit.snippet) ?? normalizeSearchText(hit.description);
 }
 
+function normalizeUrl(value: unknown): string | undefined {
+	if (typeof value !== "string" || value.length === 0 || value.length > 2048) return undefined;
+	// WHATWG parsing silently strips tabs/newlines, which would merge injected
+	// text into the URL; reject such values instead of serializing them.
+	if (/[\t\n\r]/.test(value)) return undefined;
+	try {
+		const url = new URL(value);
+		if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+		return url.toString();
+	} catch {
+		return undefined;
+	}
+}
+
 async function callKeenableSearch(
 	apiKey: string | undefined,
 	params: KeenableSearchParams,
@@ -113,11 +127,12 @@ function toSearchResponse(
 	const results = Array.isArray(payload.results) ? payload.results : [];
 	for (const value of results) {
 		const hit = asRecord(value);
-		if (!hit || typeof hit.url !== "string" || !hit.url) continue;
+		const url = hit ? normalizeUrl(hit.url) : undefined;
+		if (!hit || !url) continue;
 		const published = normalizeSearchText(hit.published_at);
 		sources.push({
-			title: normalizeSearchText(hit.title) ?? hit.url,
-			url: hit.url,
+			title: normalizeSearchText(hit.title) ?? url,
+			url,
 			snippet: snippetOf(hit),
 			publishedDate: published,
 			ageSeconds: dateToAgeSeconds(published),

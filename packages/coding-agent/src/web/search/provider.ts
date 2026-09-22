@@ -1,6 +1,5 @@
 import type { WebSearchGrounding } from "@oh-my-pi/pi-catalog/types";
 import type { SearchProvider } from "./providers/base";
-import { KeenableProvider } from "./providers/keenable";
 import { getSearchProviderLabel, type SearchEngineId, SearchProviderError } from "./types";
 
 export type { SearchParams } from "./providers/base";
@@ -24,9 +23,7 @@ const PROVIDER_LOADERS: ProviderRegistry<SearchEngineId> = {
 	jina: () => import("./providers/jina").then(m => new m.JinaProvider()),
 	kagi: () => import("./providers/kagi").then(m => new m.KagiProvider()),
 	tavily: () => import("./providers/tavily").then(m => new m.TavilyProvider()),
-	// Eager: the module-scope import matches the repo's provider convention and
-	// keeps credential rotation on the same instance across fallback retries.
-	keenable: () => Promise.resolve(new KeenableProvider()),
+	keenable: () => import("./providers/keenable").then(m => new m.KeenableProvider()),
 	firecrawl: () => import("./providers/firecrawl").then(m => new m.FirecrawlProvider()),
 	brave: () => import("./providers/brave").then(m => new m.BraveProvider()),
 	kimi: () => import("./providers/kimi").then(m => new m.KimiProvider()),
