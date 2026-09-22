@@ -5,10 +5,12 @@
 ### Added
 
 - Added Keenable API-key login (`KEENABLE_API_KEY` / `/login keenable`) for web search and page fetch ([#9939](https://github.com/can1357/oh-my-pi/pull/9939) by [@audreyt](https://github.com/audreyt)).
-- Added dynamic Claude Code version adoption to support API-requested upgrades
-- Added automatic retry mechanism on version-related request failures
 
 ## [18.2.9] - 2026-09-22
+
+### Added
+
+- Added Claude saved-reset discovery and redemption, including session-only resets, grant eligibility, expiry, and safe retry handling.
 
 ### Fixed
 
