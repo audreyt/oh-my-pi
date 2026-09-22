@@ -15,7 +15,7 @@
 // while meta/muse-spark-1.3's `max` arrives via the class lineage rule above
 // instead of a restated ladder here.
 provider "commandcode" {
-	default-model "claude-sonnet-4-6"
+	default-model "claude-sonnet-5"
 	env "COMMAND_CODE_API_KEY" "COMMANDCODE_API_KEY"
 	allow-unauthenticated #true
 	dynamic-models-authoritative #true

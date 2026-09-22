@@ -32,10 +32,11 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	// comes from the live /v1/models snapshot; no bundled rows are frozen
 	// into models.json (same shape as charm-hyper).
 	"doubleword",
-	// SingularityAPI reserved-lane roster via singularityApiModelManagerOptions:
-	// the `deepseek-ai/*` lane ids are credential-scoped (one key sees only
-	// its reserved lanes), so no rows are frozen into models.json.
-	"singularityapi",
+	// Both SingularityAPI rosters are live and credential-scoped (one key sees
+	// only its own product's models — the pay-as-you-go catalog or the reserved
+	// lanes), so no rows are frozen into models.json.
+	"singularityapi-dev",
+	"singularityapi-tech",
 	// User-configured models.yml provider pointing at
 	// https://inference-api.nousresearch.com/v1 (NousResearch inference API).
 	"nous",
