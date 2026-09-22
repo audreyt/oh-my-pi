@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getTinyModelsCacheDir } from "@oh-my-pi/pi-utils/dirs";
+import { isExecutable } from "@oh-my-pi/pi-utils/executable";
 import { isEnoent } from "@oh-my-pi/pi-utils/fs-error";
 import * as logger from "@oh-my-pi/pi-utils/logger";
 import { readLines } from "@oh-my-pi/pi-utils/stream";
@@ -74,20 +75,11 @@ function isMacos26OrLater(): boolean {
 	return Number.isFinite(major) && major >= MINIMUM_DARWIN_MAJOR;
 }
 
-async function executableExists(file: string): Promise<boolean> {
-	try {
-		await fs.access(file, fs.constants.X_OK);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 async function stageExecutable(bytes: Uint8Array): Promise<string> {
 	const directory = path.join(getTinyModelsCacheDir(), "speech-analyzer");
 	await fs.mkdir(directory, { recursive: true, mode: 0o700 });
 	const target = path.join(directory, `${SIDECAR_NAME}-${sha256(bytes).slice(0, 20)}`);
-	if (await executableExists(target)) return target;
+	if (isExecutable(target)) return target;
 
 	const temporary = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
 	try {
@@ -124,7 +116,7 @@ async function compileSidecar(): Promise<string> {
 	const identity = sha256(`${process.arch}\0${SPEECH_ANALYZER_SOURCE}`).slice(0, 20);
 	const source = path.join(directory, `${SIDECAR_NAME}-${identity}.swift`);
 	const target = path.join(directory, `${SIDECAR_NAME}-${identity}`);
-	if (await executableExists(target)) return target;
+	if (isExecutable(target)) return target;
 	await Bun.write(source, SPEECH_ANALYZER_SOURCE);
 
 	const temporary = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
@@ -402,7 +394,7 @@ export class AppleSpeechClient {
 			() => options.signal?.removeEventListener("abort", abort),
 		);
 
-		void (async () => {
+		const stdoutDone = (async () => {
 			for await (const bytes of readLines(proc.stdout as ReadableStream<Uint8Array>, stdoutAbort.signal)) {
 				const line = decoder.decode(bytes).trim();
 				if (!line) continue;
@@ -461,6 +453,12 @@ export class AppleSpeechClient {
 			.then(async exitCode => {
 				await Promise.race([stderrDone, Bun.sleep(STDERR_DRAIN_GRACE_MS)]);
 				const error = stderr.trim();
+				if (!settled && (exitCode === 0 || exitCode === null)) {
+					// The helper can exit before the reader consumes its final buffered
+					// events; drain stdout before treating a clean exit as success so
+					// stop() never resolves with a partial transcript.
+					await stdoutDone;
+				}
 				if (!settled) {
 					if (exitCode === 0 || exitCode === null) {
 						finish(collectedSegments.join(" ") || lastPartial);

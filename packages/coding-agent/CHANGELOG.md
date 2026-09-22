@@ -20,6 +20,10 @@
 
 - Added opt-in Apple Foundation Models (`afm-core`) session title generation for Darwin hosts ([#9683](https://github.com/can1357/oh-my-pi/pull/9683)).
 
+### Added
+
+- Added opt-in Apple SpeechAnalyzer speech-to-text on macOS 26+, with live partials and system-managed locale assets ([#10019](https://github.com/can1357/oh-my-pi/pull/10019)).
+
 ### Changed
 
 - Updated server-side fallback documentation and logic to target claude-opus-5-5

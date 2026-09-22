@@ -50,6 +50,23 @@ if (locale.startsWith("late-fail:")) {
   process.stderr.write("fake sidecar failed late\\n");
   process.exit(9);
 }
+if (locale.startsWith("delayed-done")) {
+  for await (const chunk of Bun.stdin.stream()) {
+    void chunk;
+  }
+  emit({ type: "segment", text: "seg0", index: 0 });
+  emit({ type: "segment", text: "seg1", index: 1 });
+  // Real-delay exception: this process exits now while a detached delayer
+  // holding the same stdout pipe delivers the final done event 150 ms
+  // later, after the client exit grace, deterministically reproducing the
+  // exit-before-drain race.
+  Bun.spawn([process.execPath, "-e", 'await Bun.sleep(150);console.log(JSON.stringify({type:"done",text:"late done"}))'], {
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "ignore",
+  });
+  process.exit(0);
+}
 const chunks = [];
 for await (const chunk of Bun.stdin.stream()) chunks.push(Buffer.from(chunk));
 const audio = Buffer.concat(chunks);
@@ -156,6 +173,17 @@ describe("AppleSpeechClient sidecar protocol", () => {
 		const stream = await client.startStream(`late-fail:${marker}`);
 		await exiting;
 		await expect(stream.stop()).rejects.toThrow(/failed late|exited before completing/);
+	});
+
+	it("drains buffered stdout before settling a clean process exit", async () => {
+		const segments: string[] = [];
+		const stream = await client.startStream("delayed-done", {
+			onSegment: text => segments.push(text),
+		});
+		// The final `done` event arrives after the sidecar has already exited;
+		// the client must wait for it instead of settling with "seg0 seg1".
+		expect(await stream.stop()).toBe("late done");
+		expect(segments).toEqual(["seg0", "seg1"]);
 	});
 });
 

@@ -15,7 +15,7 @@ import { discoverAuthStorage } from "../session/auth-broker-config";
 import { theme } from "@oh-my-pi/pi-tui/theme";
 import { appleSpeechClient } from "../stt/apple-speech-client";
 import { downloadSttModel, isSttModelCached } from "../stt/downloader";
-import { isSpeechAnalyzerModel, isSttModelKey, resolveSttModelSpec, STT_MODEL_OPTIONS } from "../stt/models";
+import { isSttModelKey, resolveSttModelSpec, STT_MODEL_OPTIONS } from "../stt/models";
 import { downloadTtsModel, isTtsLocalModelKey, isTtsModelCached, TTS_LOCAL_MODELS } from "../tts";
 import { selectSetupModel } from "@oh-my-pi/pi-tui/apps/setup-model-picker";
 
@@ -152,9 +152,9 @@ async function handlePythonSetup(flags: { json?: boolean; check?: boolean }): Pr
 }
 
 /**
- * One installable speech dependency. `isReady`/`status` are read-only probes;
- * `pick` (optional) lets an interactive user choose + persist a model; `ensure`
- * performs the download, streaming a normalized progress event.
+ * One speech dependency. `isReady`/`status` are read-only probes; `pick`
+ * (optional) lets an interactive user choose + persist an engine; `ensure`
+ * prepares its application-managed model or system-managed locale asset.
  */
 interface SpeechComponent {
 	name: string;
@@ -188,17 +188,22 @@ function buildSpeechComponents(settings: Settings, registry: ModelRegistry): Spe
 		{
 			name: "Speech-to-Text model",
 			isReady: async () => {
-				const key = resolveLocalSpeechModelId("dictation", settings, registry);
-				if (isSpeechAnalyzerModel(resolveSttModelSpec(key))) {
-					const status = await appleSpeechClient.status(settings.get("stt.language"));
-					return status.success && status.available && status.supported && status.installed;
+				const spec = resolveSttModelSpec(resolveLocalSpeechModelId("dictation", settings, registry));
+				if (spec.engine === "speech-analyzer") {
+					return (await appleSpeechClient.status(settings.get("stt.language"))).installed;
 				}
-				return isSttModelCached(key);
+				return await isSttModelCached(spec.key);
 			},
 			status: async () => {
-				const key = resolveLocalSpeechModelId("dictation", settings, registry);
-				if (isSpeechAnalyzerModel(resolveSttModelSpec(key))) return `${key} — system-managed`;
-				return (await isSttModelCached(key)) ? key : `${key} — not downloaded`;
+				const spec = resolveSttModelSpec(resolveLocalSpeechModelId("dictation", settings, registry));
+				if (spec.engine === "speech-analyzer") {
+					const status = await appleSpeechClient.status(settings.get("stt.language"));
+					if (status.installed) {
+						return `${spec.key} — ${status.locale ?? "system locale"} (system-managed)`;
+					}
+					return `${spec.key} — ${status.error ?? "locale asset not prepared"}`;
+				}
+				return (await isSttModelCached(spec.key)) ? spec.key : `${spec.key} — not downloaded`;
 			},
 			pick: async () => {
 				const current = resolveLocalSpeechModelId("dictation", settings, registry);
@@ -211,8 +216,8 @@ function buildSpeechComponents(settings: Settings, registry: ModelRegistry): Spe
 				return true;
 			},
 			ensure: async onProgress => {
-				const key = resolveLocalSpeechModelId("dictation", settings, registry);
-				if (isSpeechAnalyzerModel(resolveSttModelSpec(key))) {
+				const spec = resolveSttModelSpec(resolveLocalSpeechModelId("dictation", settings, registry));
+				if (spec.engine === "speech-analyzer") {
 					onProgress({ stage: "Preparing system-managed Apple speech recognition" });
 					const status = await appleSpeechClient.prepare(settings.get("stt.language"));
 					onProgress({
@@ -221,7 +226,7 @@ function buildSpeechComponents(settings: Settings, registry: ModelRegistry): Spe
 					});
 					return;
 				}
-				await downloadSttModel(key, progress =>
+				await downloadSttModel(spec.key, progress =>
 					onProgress({ stage: `Downloading ${progress.label} model`, percent: progress.percent }),
 				);
 			},
