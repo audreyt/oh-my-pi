@@ -3,17 +3,11 @@
 // bundle's 36-id effort registry 1:1 (verified against its effort map), plus
 // the 5 Muse Spark lineage ids whose ladder OMP's classes/meta.kdl carries and
 // `deepseek/deepseek-v4.1-flash`, which postdates that bundle (see its rule).
-// 1.1/1.2 still list the five-tier ladder here because the class exact ids
-// are bare (`muse-spark-1.1`); 1.3 reseller ids omit thinking-efforts so the
-// class `meta/` rule wins (max on standard, five-tier on contributor).
-// This host is openai-completions
-// effort dialect, not Vercel's Anthropic-budget route.
 // Every id the 1.44.0 census serves without an effort dial keeps a missing
 // ladder here as a deliberate absence, not a gap (`modelSupportsReasoning-
 // Effort` is false for those ids in that bundle). Later bundles (1.53.0) hand
-// dials to a few further ids — MiniMaxAI/MiniMax-M3 stays out of this file,
-// while meta/muse-spark-1.3's `max` arrives via the class lineage rule above
-// instead of a restated ladder here.
+// dials to a few further ids — MiniMaxAI/MiniMax-M3 and meta/muse-spark-1.3's
+// `max` — which stay out of this change.
 provider "commandcode" {
 	default-model "claude-sonnet-5"
 	env "COMMAND_CODE_API_KEY" "COMMANDCODE_API_KEY"
@@ -94,11 +88,10 @@ provider "commandcode" {
 		supports-reasoning-effort #true
 		thinking-efforts "minimal" "low" "medium" "high" "xhigh"
 	}
-	// Class lineage owns the 1.3 ladder (max on standard, five-tier on
-	// contributor). This block only opts the host into an effort dial —
-	// provider default is supports-reasoning-effort #false. Do not restate
-	// thinking-efforts: equal-specificity overlap with classes/meta.kdl is
-	// an AmbiguousOverlapError.
+	// Class lineage owns the 1.3 ladder (adds max). This block only opts the
+	// host into an effort dial — provider default is supports-reasoning-effort
+	// #false. Do not restate thinking-efforts: equal-specificity overlap with
+	// classes/meta.kdl is an AmbiguousOverlapError.
 	models "meta/muse-spark-1.3" "meta/muse-spark-1.3-contributor" {
 		supports-reasoning-effort #true
 	}

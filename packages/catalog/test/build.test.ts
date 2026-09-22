@@ -478,7 +478,7 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		expect(model.thinking?.efforts).not.toContain(Effort.Max);
 	});
 
-	it("exposes the max tier on 1.3 standard rows while contributor rows stay capped at xhigh", () => {
+	it("exposes the max tier on the muse-spark-1.3 standard SKU only", () => {
 		const spark13 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.3",
@@ -509,8 +509,8 @@ describe("xAI Responses reasoning-effort suppression", () => {
 		);
 		// Upstream policy (classes/meta.kdl): Meta documents `max` for the
 		// 1.3 standard SKU only; the contributor SKU keeps the five-tier
-		// ladder. The `-free` billing variant below is the branch's residue
-		// coverage and keeps its own exact-id rule.
+		// ladder. The `-free` billing variant below is the same contributor
+		// model at zero price, so it stays on the five-tier ladder too.
 		expect(contributor.thinking?.efforts).toEqual([
 			Effort.Minimal,
 			Effort.Low,
@@ -528,7 +528,13 @@ describe("xAI Responses reasoning-effort suppression", () => {
 				input: ["text", "image"],
 			}),
 		);
-		expect(freeAlias.thinking?.efforts).toContain(Effort.Max);
+		expect(freeAlias.thinking?.efforts).toEqual([
+			Effort.Minimal,
+			Effort.Low,
+			Effort.Medium,
+			Effort.High,
+			Effort.XHigh,
+		]);
 		const spark12 = buildModel(
 			completionsSpec({
 				id: "muse-spark-1.2",

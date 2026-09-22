@@ -446,6 +446,8 @@ describe("Command Code provider support", () => {
 		const specs = await options.fetchDynamicModels?.();
 		const models = (specs ?? []).map(spec => buildModel(spec));
 		expect(models).toHaveLength(2);
+		// Meta documents `max` for the 1.3 standard SKU only; the
+		// contributor SKU keeps the five-tier ladder.
 		expect(models.find(model => model.id === "meta/muse-spark-1.3")?.thinking).toEqual({
 			mode: "effort",
 			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max],
