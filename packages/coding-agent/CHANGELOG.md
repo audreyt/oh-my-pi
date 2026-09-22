@@ -6,6 +6,10 @@
 - Added the built-in `judge` tool for calibrated typed judgments (noul/choice/score) through the session's judgment backend (`providers.judgmentProvider`), enabled by `judge.enabled`.
 - Added opt-in `skills.suggestion` setting: when enabled, each user turn makes one judgment-backend call that may inject a one-line skill suggestion into the turn context.
 
+### Added
+
+- Added the `ask` tool to `/vibe` directors with an interactive UI so they can request user-owned decisions without leaving director mode.
+
 ### Changed
 
 - Updated server-side fallback documentation and logic to target claude-opus-5-5

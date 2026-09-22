@@ -34,7 +34,7 @@ The tier always selects the bundled `sonic` or `task` definition, not a same-nam
 
 ## Director-only tools
 
-`ask` is kept in the director toolset only when the session owns the built-in tool — an interactive UI with `ask.enabled` on — **and** `ask` was still in the enabled toolset when you entered the mode. Entering never re-grants an `ask` you had turned off via `/tools`, and exiting restores the exact prior toolset. It asks the **user** for a decision; it is not a worker-control action and is not a substitute for delegating investigation or execution. In headless sessions, the tool is not registered and is therefore omitted from the director toolset.
+`ask` is kept in the director toolset only when the session owns the built-in tool — an interactive UI with `ask.enabled` on — **and** `ask` was still in the enabled toolset when you entered the mode. Neither entering nor resuming the session later re-grants an `ask` you had turned off via `/tools`, and exiting restores the exact prior toolset. It asks the **user** for a decision; it is not a worker-control action and is not a substitute for delegating investigation or execution. In headless sessions, the tool is not registered and is therefore omitted from the director toolset.
 
 When `todo.enabled` is on, `todo` remains available for the parent director's workstream bookkeeping. Workers keep their own task state.
 

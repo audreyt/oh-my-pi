@@ -3700,6 +3700,10 @@ export class InteractiveMode implements InteractiveModeContext {
 					previousTools: vibeToolsetLostToTeardown
 						? readPersistedToolNames(sessionContext.modeData?.previousTools)
 						: undefined,
+					// Ask eligibility always follows the persisted entry-time
+					// set; when no snapshot was recorded this is undefined and
+					// entry falls back to the exit snapshot above.
+					askEligibilityTools: readPersistedToolNames(sessionContext.modeData?.previousTools),
 				});
 			}
 			return;
@@ -4773,7 +4777,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 	}
 
-	async #enterVibeMode(options?: { persistModeChange?: boolean; previousTools?: string[] }): Promise<void> {
+	async #enterVibeMode(options?: {
+		persistModeChange?: boolean;
+		previousTools?: string[];
+		askEligibilityTools?: string[];
+	}): Promise<void> {
 		if (this.vibeModeEnabled) {
 			return;
 		}
@@ -4805,9 +4813,13 @@ export class InteractiveMode implements InteractiveModeContext {
 		// path passes the pre-vibe toolset recorded on the target's own mode_change
 		// entry instead.
 		const previousTools = options?.previousTools ?? this.session.getEnabledToolNames();
+		// Resume paths rebuild previousTools from the fresh toolset (kept for
+		// exit restoration) but gate Ask on the persisted entry-time set, so a
+		// resume never re-grants an `ask` disabled at entry.
+		const askEligibilityTools = options?.askEligibilityTools ?? previousTools;
 		const vibeBaseTools = ["read"];
 		if (this.session.hasBuiltInTool("todo")) vibeBaseTools.push("todo");
-		if (this.session.hasBuiltInTool("ask") && previousTools.includes("ask")) vibeBaseTools.push("ask");
+		if (this.session.hasBuiltInTool("ask") && askEligibilityTools.includes("ask")) vibeBaseTools.push("ask");
 		// The entry runs as a stored promise so a concurrent /vibe joins it
 		// above instead of dispatching on the stale toolset. The first caller
 		// awaits it below, so a failure is always observed (no unhandled
