@@ -12,6 +12,8 @@
 
 - Existing model caches no longer hide Muse Spark 1.3's new `max` thinking effort after upgrading.
 - Vercel's Muse Spark Anthropic route retains its supported thinking ladder instead of offering a duplicate `max` budget.
+- Added hosted image-model defaults to the compat policy for the model-less `generate_image` backends (`meta-image` → `muse-image-1.0`, plus Gemini, Antigravity, OpenRouter, xAI, and DeepInfra), with credential-run backends declared in the same policy.
+
 ### Changed
 
 - Updated default models for anthropic, amazon-bedrock, cloudflare-ai-gateway, kilo, litellm, opencode-zen, vercel-ai-gateway, and zenmux to claude-opus-5-5

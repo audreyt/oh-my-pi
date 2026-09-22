@@ -50,6 +50,15 @@ const RUNTIME_ONLY_PROVIDERS = new Set([
 	"deepinfra-image",
 ]);
 
+// Hosted image-generation defaults (`<backend>-image`) are referenced from
+// behavior.hostedDefaults and resolved at runtime via hostedDefaultModel
+// (packages/coding-agent/src/tools/image-gen.ts), so they are derived from
+// the KDL policy instead of being hard-coded: a new backend needs no test
+// edit, and this allowlist cannot bless a backend that lacks its default.
+for (const entry of rules.behavior.hostedDefaults) {
+	if (entry.provider.endsWith("-image")) RUNTIME_ONLY_PROVIDERS.add(entry.provider);
+}
+
 function collectReferencedProviders(): Map<string, string> {
 	const referenced = new Map<string, string>();
 	for (const rule of rules.cascade.rules) {

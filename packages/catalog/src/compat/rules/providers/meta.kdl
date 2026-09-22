@@ -3,10 +3,10 @@
 provider "meta" {
 	default-model "muse-spark-1.1"
 	env "MODEL_API_KEY" "META_API_KEY"
+	discovery label="Meta Model API"
 	kind-apis {
 		image "openai-images"
 	}
-	discovery label="Meta Model API"
 
 	// Muse Spark revisions served by Meta's first-party Responses API. Meta's
 	// `/v1/models` lists bare ids with no capability metadata, so every revision
@@ -67,6 +67,9 @@ provider "meta" {
 			supports-reasoning-effort #true
 			include-encrypted-reasoning #true
 		}
+		// Muse Image served by Meta's OpenAI-compatible images endpoints.
+		// Like the chat revisions above, discovery yields no capability
+		// metadata, so the image model must be seeded here.
 		model "muse-image-1.0" name="Muse Image 1.0" api="openai-images" {
 			reasoning #false
 			input "text" "image"

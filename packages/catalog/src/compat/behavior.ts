@@ -3,7 +3,7 @@
  * (`rules/runtime/behavior.kdl`): provider/model heuristics that run before
  * or outside exact bundled-model lookup — responses routing, API routing,
  * quota tiers, plan requirements, model limits, roster and discovery-mode
- * exclusions, hosted defaults, pricing peers, and image-provider backends.
+ * exclusions, hosted defaults, and pricing peers.
  */
 import { globMatch } from "./cascade";
 import rules from "./rules.json";
