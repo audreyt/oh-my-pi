@@ -5,14 +5,16 @@
 ### Added
 
 - OpenAI-compatible hosts can opt into `service_tier` via `supportsServiceTier` / `defaultServiceTier`, so a provider like Doubleword can default to async `flex` while `/fast` still requests `priority` ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
-- Added dynamic Claude Code version adoption to support API-requested upgrades
-- Added automatic retry mechanism on version-related request failures
 
 ### Changed
 
 - `serviceTier: "none"` is now an explicit omit sentinel that suppresses a model's `defaultServiceTier` fallback; the default tier is applied at the request boundary, so an unconfigured session still gets it ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
 
 ## [18.2.9] - 2026-09-22
+
+### Added
+
+- Added Claude saved-reset discovery and redemption, including session-only resets, grant eligibility, expiry, and safe retry handling.
 
 ### Fixed
 
