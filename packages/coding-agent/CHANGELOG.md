@@ -8,11 +8,6 @@
 - Added host `link` for `memory.backend: mnemon` (`id1`/`id2`/`type`/`weight`, including `supersedes`). `retain` now returns the new insight id and link candidates so the graph loop can close without dropping to the CLI. `supersedes` falls back to `causal` on CLIs that reject the fifth edge type.
 - Added host `related` and `forget` for `memory.backend: mnemon`. `retain` now accepts `category`, `importance`, and `entities` instead of hardcoding `context`/`3`. `recall` accepts optional `limit`.
 
-### Changed
-
-- Updated server-side fallback documentation and logic to target claude-opus-5-5
-- Added support for claude-opus-5-5 to model priority registry
-
 ### Fixed
 
 - Fixed `/memory stats` crashing on `memory.backend: mnemon` (`undefined is not an object (evaluating 'this.status')`) when the TUI extracted the unbound hook.
@@ -24,10 +19,14 @@
 
 ### Added
 
+- Added Claude saved resets to usage views and `/usage reset`, with automatic blocked-limit recovery and expiring-reset redemption controlled by `claudeResets`.
+
 - Added support for searching embedded harness documentation with `find` and `omp find` using `omp://` scopes, including file-specific searches and `:start-end` selectors; results open directly through canonical `omp://` URLs.
 
 ### Changed
 
+- Updated server-side fallback documentation and logic to target claude-opus-5-5
+- Added support for claude-opus-5-5 to model priority registry
 - Updated the read tool guidance to decode images inline by default and require an explicit `:img` selector for SVG rendering.
 - Improved model discovery and fallback behavior: authentication failures are surfaced in the `/models` hub, and models without a matching role-specific fallback now use the default fallback chain.
 - Improved resilience for subagents by retrying provider stream failures that occur after partial output and preserving configured ordered model fallbacks at startup.
