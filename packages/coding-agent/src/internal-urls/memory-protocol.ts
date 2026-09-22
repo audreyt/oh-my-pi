@@ -419,20 +419,15 @@ export class MemoryProtocolHandler implements ProtocolHandler {
 		// `memory_edit update` and lets agents inspect the full content of a
 		// clipped recall preview before overwriting it (issue #4443).
 		if (namespace !== MEMORY_NAMESPACE) {
-			// An explicit backend wins over every fallback below, for bound
-			// and legacy callers alike: a mnemon caller gets the host-tool
-			// pointer even when a hindsight session is registered, and a
-			// hindsight caller gets the corrective pointer even when mnemopi
-			// banks exist.
+			// An explicit mnemon backend wins over every other gate: native
+			// Mnemon memories are never addressable via memory://.
 			if (backend === "mnemon") {
 				throw new Error(
 					"Native Mnemon memories are not addressable via memory://. Use `recall` for ids, then `related` / `forget`. The CLI is an alternative. `read memory://<id>` is only available with memory.backend=mnemopi.",
 				);
 			}
-			if (backend === "hindsight") {
-				throw new Error(HINDSIGHT_UNADDRESSABLE);
-			}
 			if (!caller.legacy) {
+				if (backend === "hindsight") throw new Error(HINDSIGHT_UNADDRESSABLE);
 				if (backend === "mnemopi") {
 					const hit = caller.session ? callerMnemopiState(caller.session)?.getScopedMemory(namespace) : undefined;
 					if (hit) return renderMnemopiMemory(url, hit);
@@ -442,12 +437,14 @@ export class MemoryProtocolHandler implements ProtocolHandler {
 				}
 				throw unknownNamespaceError(namespace);
 			}
+
 			const mnemopiStates = mnemopiSessionStatesFromRegistry();
 			const hindsightActive =
-				mnemopiStates.length === 0 &&
-				AgentRegistry.global()
-					.list()
-					.some(ref => ref.session?.getHindsightSessionState?.());
+				backend === "hindsight" ||
+				(mnemopiStates.length === 0 &&
+					AgentRegistry.global()
+						.list()
+						.some(ref => ref.session?.getHindsightSessionState?.()));
 			if (hindsightActive) {
 				throw new Error(HINDSIGHT_UNADDRESSABLE);
 			}

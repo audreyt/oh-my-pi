@@ -2962,11 +2962,12 @@ export const SETTINGS_SCHEMA = {
 	"memories.summaryInjectionTokenLimit": { type: "number", default: 5000 },
 
 	// Memory backend selector — picks between local memories pipeline,
-	// Mnemopi local SQLite, native Mnemon CLI, Hindsight remote memory, Sharpshooter project
-	// decisions, or off. The legacy `memories.enabled` flag is migration input only; see config/settings.ts.
+	// Mnemopi local SQLite, native Mnemon CLI, Hindsight remote memory,
+	// Sharpshooter project decisions, or off. The legacy
+	// `memories.enabled` flag is migration input only; see config/settings.ts.
 	"memory.backend": {
 		type: "enum",
-		values: ["off", "local", "hindsight", "mnemopi", "mnemon", "sharpshooter"] as const,
+		values: ["off", "local", "hindsight", "mnemopi", "sharpshooter", "mnemon"] as const,
 		default: "off",
 		ui: {
 			tab: "memory",
@@ -2993,6 +2994,11 @@ export const SETTINGS_SCHEMA = {
 					label: "Sharpshooter",
 					description:
 						"Friction-gated project decision files (architecture/product/style), consolidated in the background",
+				},
+				{
+					value: "mnemon",
+					label: "Mnemon",
+					description: "Native Mnemon CLI against ~/.mnemon (typed graph, configurable auto-retention)",
 				},
 			],
 		},
