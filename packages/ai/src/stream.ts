@@ -1842,7 +1842,7 @@ function resolveBedrockThinkingBudget(
 	model: Model<"bedrock-converse-stream">,
 	options?: SimpleStreamOptions,
 ): { budget: number; level: Effort } | null {
-	if (!options?.reasoning || !model.reasoning) return null;
+	if (!options?.reasoning || !model.reasoning || options.disableReasoning || options.forceReasoningOff) return null;
 	const level = requireSupportedEffort(model, options.reasoning);
 	const budget = options.thinkingBudgets?.[level] ?? BEDROCK_CLAUDE_THINKING[level];
 	return { budget, level };
@@ -2176,7 +2176,11 @@ function mapOptionsForApi<TApi extends Api>(
 		case "bedrock-converse-stream": {
 			const bedrockBase: BedrockOptions = {
 				...base,
-				reasoning: options?.reasoning,
+				// Explicit reasoning-off must fold here like the anthropic-messages
+				// branch: the provider gates thinking only on `reasoning`, and the
+				// budget path below must not inflate a capped request for thinking
+				// that was turned off.
+				reasoning: options?.disableReasoning || options?.forceReasoningOff ? undefined : options?.reasoning,
 				thinkingBudgets: options?.thinkingBudgets,
 				toolChoice: mapAnthropicToolChoice(options?.toolChoice),
 				thinkingDisplay: options?.hideThinkingSummary ? "omitted" : undefined,
@@ -2221,6 +2225,9 @@ function mapOptionsForApi<TApi extends Api>(
 					openrouterVariant: options?.openrouterVariant,
 					maxTokensExplicit: rawOptions?.maxTokens !== undefined,
 					disableReasoning: options?.disableReasoning,
+					// Forwarded, not folded: the Responses record reads both flags
+					// itself (`applyResponsesCompatPolicy`).
+					forceReasoningOff: options?.forceReasoningOff,
 					textVerbosity: options?.textVerbosity,
 					promptCache: options?.promptCache,
 					statefulResponses: options?.statefulResponses,
@@ -2229,7 +2236,8 @@ function mapOptionsForApi<TApi extends Api>(
 			return castApi<"openai-completions">({
 				...base,
 				reasoning: resolveOpenAiReasoningEffort(model, options),
-				disableReasoning: options?.disableReasoning,
+				// `OpenAICompletionsOptions` carries no forceReasoningOff; fold it.
+				disableReasoning: options?.disableReasoning || options?.forceReasoningOff,
 				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
 				serviceTier,
 				openrouterVariant: options?.openrouterVariant,
@@ -2242,7 +2250,8 @@ function mapOptionsForApi<TApi extends Api>(
 			return castApi<"openai-completions">({
 				...base,
 				reasoning: resolveOpenAiReasoningEffort(model, options),
-				disableReasoning: options?.disableReasoning,
+				// `OpenAICompletionsOptions` carries no forceReasoningOff; fold it.
+				disableReasoning: options?.disableReasoning || options?.forceReasoningOff,
 				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
 				serviceTier,
 				openrouterVariant: options?.openrouterVariant,
