@@ -38,6 +38,7 @@ export function getExtraHelpText(): string {
   CHARM_HYPER_API_KEY        - Charm Hyper inference gateway models
   DOUBLEWORD_API_KEY         - Doubleword inference (async flex default; /fast for realtime)
   AI_GATEWAY_API_KEY         - Vercel AI Gateway
+  STEPFUN_API_KEY            - StepFun Step models
   WAFER_SERVERLESS_API_KEY   - Wafer Serverless (pay-as-you-go)
   YOLO_AUTO_API_KEY          - Yolo-Auto flat-rate Qwen models
   SINGULARITYAPI_DEV_API_KEY - SingularityAPI universal gateway (300+ models)

@@ -28,14 +28,16 @@ describe("Keenable web search provider", () => {
 	});
 
 	const fakeAuthStorage = {
-		async getApiKey() {
-			return process.env.KEENABLE_API_KEY ?? undefined;
-		},
-		hasAuth() {
-			return Boolean(process.env.KEENABLE_API_KEY);
-		},
-		resolver(_provider: string) {
-			return async () => process.env.KEENABLE_API_KEY ?? undefined;
+		keys: {
+			async get() {
+				return process.env.KEENABLE_API_KEY ?? undefined;
+			},
+			source() {
+				return process.env.KEENABLE_API_KEY ? { kind: "api_key", concrete: true } : undefined;
+			},
+			resolver(_provider: string) {
+				return async () => process.env.KEENABLE_API_KEY ?? undefined;
+			},
 		},
 		async rotateSessionCredential() {
 			return false;
@@ -62,7 +64,7 @@ describe("Keenable web search provider", () => {
 	it("keeps a rotated credential across the recency fallback", async () => {
 		let key = "rejected-key";
 		const sentKeys: (string | null)[] = [];
-		vi.spyOn(fakeAuthStorage, "resolver").mockReturnValue(async () => key);
+		vi.spyOn(fakeAuthStorage.keys, "resolver").mockReturnValue(async () => key);
 		const response = await searchKeenable({
 			...makeParams("ai chips"),
 			recency: "day",

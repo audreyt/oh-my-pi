@@ -14,7 +14,7 @@ export interface FileLockOptions {
 	retries?: number;
 	/** Delay between acquisition attempts. */
 	retryDelayMs?: number;
-	/** Abort waiting for a contended lock. */
+	/** Cancel acquisition while waiting for another process to release the resource. */
 	signal?: AbortSignal;
 }
 
@@ -79,6 +79,7 @@ function acquireLockSync(filePath: string, options: FileLockOptions = {}): Nativ
 	const lockPath = getLockPath(filePath);
 
 	for (let attempt = 0; attempt < opts.retries; attempt++) {
+		opts.signal?.throwIfAborted();
 		const lock = tryAcquireLock(lockPath);
 		if (lock) return lock;
 		if (attempt + 1 < opts.retries && opts.retryDelayMs > 0) Bun.sleepSync(opts.retryDelayMs);

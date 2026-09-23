@@ -180,7 +180,7 @@ export async function searchKeenable(params: SearchParams): Promise<SearchRespon
 		if (parsed.before) keenableParams.published_before = parsed.before;
 	}
 
-	const keyResolver = params.authStorage.resolver("keenable", {
+	const keyResolver = params.authStorage.keys.resolver("keenable", {
 		sessionId: params.sessionId,
 	});
 	const numResults = clampNumResults(keenableParams.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
@@ -220,7 +220,7 @@ export class KeenableProvider extends SearchProvider {
 	readonly label = "Keenable";
 
 	isAvailable(authStorage: AuthStorage): boolean {
-		return authStorage.hasAuth("keenable") || !!getEnvApiKey("keenable");
+		return authStorage.keys.source("keenable") !== undefined || !!getEnvApiKey("keenable");
 	}
 
 	/**

@@ -14,6 +14,21 @@
 - Vercel's Muse Spark Anthropic route retains its supported thinking ladder instead of offering a duplicate `max` budget.
 - Added hosted image-model defaults to the compat policy for the model-less `generate_image` backends (`meta-image` → `muse-image-1.0`, plus Gemini, Antigravity, OpenRouter, xAI, and DeepInfra), with credential-run backends declared in the same policy.
 - Added the `max` thinking-effort tier to the standard Muse Spark 1.3 SKU on reseller hosts and Command Code, with the ladder owned by the class lineage.
+- Added per-account discovery support for Codex cyber access entitlements
+- Added `org-scoped-identity` and `oauth-token-env` rule support for auth providers
+
+## [18.2.11] - 2026-09-23
+
+### Added
+
+- Added built-in StepFun provider support for the step-5-preview model, including live model discovery.
+
+### Fixed
+
+- Fixed cost estimation for OpenAI Codex GPT-6 Sol and Luna models across standard and worker routes.
+- Fixed GitHub Copilot Grok 4.x models failing to make requests.
+
+## [18.2.10] - 2026-09-22
 
 ### Changed
 

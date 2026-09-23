@@ -5,6 +5,11 @@
 ### Fixed
 
 - Chat telemetry, usage events, and cost estimates now reflect a model's `defaultServiceTier` (e.g. Doubleword's async `flex`) when no tier is configured, matching what is actually sent on the wire ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
+## [18.2.11] - 2026-09-23
+
+### Fixed
+
+- Fixed background job completions interrupting foreground Bash and eval calls, which could cause those calls to be repeatedly moved into the background.
 
 ## [18.2.9] - 2026-09-22
 

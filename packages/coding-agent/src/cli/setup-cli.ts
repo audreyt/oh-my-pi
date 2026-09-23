@@ -11,7 +11,7 @@ import { ModelRegistry } from "../config/model-registry";
 import { resolveRoleChain } from "../config/model-resolver";
 import { roleCandidatePool } from "../config/model-roles";
 import { checkPythonKernelAvailability } from "../eval/py/kernel";
-import { discoverAuthStorage } from "../session/auth-broker-config";
+import { discoverAuthStorage } from "../sdk";
 import { theme } from "@oh-my-pi/pi-tui/theme";
 import { appleSpeechClient } from "../stt/apple-speech-client";
 import { downloadSttModel, isSttModelCached } from "../stt/downloader";
@@ -265,7 +265,8 @@ function buildSpeechComponents(settings: Settings, registry: ModelRegistry): Spe
  * values).
  */
 async function handleSpeechSetup(flags: { json?: boolean; check?: boolean }): Promise<void> {
-	const [settings, authStorage] = await Promise.all([Settings.init({ cwd: getProjectDir() }), discoverAuthStorage()]);
+	const settings = await Settings.init({ cwd: getProjectDir() });
+	const authStorage = await discoverAuthStorage(undefined, { settings });
 	const registry = new ModelRegistry(authStorage, undefined, { settings });
 	const components = buildSpeechComponents(settings, registry);
 
