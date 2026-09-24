@@ -8,6 +8,7 @@ import { appleSpeechClient } from "@oh-my-pi/pi-coding-agent/stt/apple-speech-cl
 import * as asrClient from "@oh-my-pi/pi-coding-agent/stt/asr-client";
 import * as downloader from "@oh-my-pi/pi-coding-agent/stt/downloader";
 import { STTController, type STTControllerDependencies } from "@oh-my-pi/pi-coding-agent/stt/stt-controller";
+import { cfgSttLanguage } from "@oh-my-pi/pi-coding-agent/stt/settings";
 import { getTinyModelsCacheDir, removeWithRetries, setAgentDir } from "@oh-my-pi/pi-utils";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
@@ -213,7 +214,7 @@ describe("STTController preflight", () => {
 
 	it("re-runs Apple preflight when the locale changes mid-session", async () => {
 		settings.setModelRole("dictation", "local/macos");
-		settings.set("stt.language", "en");
+		cfgSttLanguage.set(settings, "en");
 		const status = vi.spyOn(appleSpeechClient, "status").mockImplementation(async language => ({
 			success: true,
 			available: true,
@@ -236,7 +237,7 @@ describe("STTController preflight", () => {
 		expect(status).toHaveBeenLastCalledWith("en", expect.any(AbortSignal));
 
 		await controller.toggle(editor, makeOptions());
-		settings.set("stt.language", "zh-Hant");
+		cfgSttLanguage.set(settings, "zh-Hant");
 		await controller.toggle(editor, makeOptions());
 
 		expect(controller.state).toBe("recording");

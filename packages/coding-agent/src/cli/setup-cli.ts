@@ -16,8 +16,11 @@ import { theme } from "@oh-my-pi/pi-tui/theme";
 import { appleSpeechClient } from "../stt/apple-speech-client";
 import { downloadSttModel, isSttModelCached } from "../stt/downloader";
 import { isSttModelKey, resolveSttModelSpec, STT_MODEL_OPTIONS } from "../stt/models";
+import { cfgSttLanguage } from "../stt/settings";
 import { downloadTtsModel, isTtsLocalModelKey, isTtsModelCached, TTS_LOCAL_MODELS } from "../tts";
 import { selectSetupModel } from "@oh-my-pi/pi-tui/apps/setup-model-picker";
+
+import { cfgPythonInterpreter } from "../eval/settings";
 
 export type SetupComponent = "python" | "speech";
 
@@ -122,7 +125,7 @@ export async function runSetupCommand(cmd: SetupCommandArgs): Promise<void> {
 async function handlePythonSetup(flags: { json?: boolean; check?: boolean }): Promise<void> {
 	const cwd = getProjectDir();
 	const projectSettings = await Settings.init({ cwd });
-	const interpreter = projectSettings.get("python.interpreter")?.trim() || undefined;
+	const interpreter = cfgPythonInterpreter.get(projectSettings)?.trim() || undefined;
 	const check = await checkPythonSetup(cwd, interpreter);
 
 	if (flags.json) {
@@ -190,14 +193,14 @@ function buildSpeechComponents(settings: Settings, registry: ModelRegistry): Spe
 			isReady: async () => {
 				const spec = resolveSttModelSpec(resolveLocalSpeechModelId("dictation", settings, registry));
 				if (spec.engine === "speech-analyzer") {
-					return (await appleSpeechClient.status(settings.get("stt.language"))).installed;
+					return (await appleSpeechClient.status(cfgSttLanguage.get(settings))).installed;
 				}
 				return await isSttModelCached(spec.key);
 			},
 			status: async () => {
 				const spec = resolveSttModelSpec(resolveLocalSpeechModelId("dictation", settings, registry));
 				if (spec.engine === "speech-analyzer") {
-					const status = await appleSpeechClient.status(settings.get("stt.language"));
+					const status = await appleSpeechClient.status(cfgSttLanguage.get(settings));
 					if (status.installed) {
 						return `${spec.key} — ${status.locale ?? "system locale"} (system-managed)`;
 					}
@@ -219,7 +222,7 @@ function buildSpeechComponents(settings: Settings, registry: ModelRegistry): Spe
 				const spec = resolveSttModelSpec(resolveLocalSpeechModelId("dictation", settings, registry));
 				if (spec.engine === "speech-analyzer") {
 					onProgress({ stage: "Preparing system-managed Apple speech recognition" });
-					const status = await appleSpeechClient.prepare(settings.get("stt.language"));
+					const status = await appleSpeechClient.prepare(cfgSttLanguage.get(settings));
 					onProgress({
 						stage: `Apple speech recognition ready${status.locale ? ` (${status.locale})` : ""}`,
 						percent: 100,

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Claude Opus 5.5 requests that force tool use, preventing turn failures and allowing forced tool selections to fall back to automatic tool selection when required.
+- Yolo-Auto Qwen3.8 models now offer the `xhigh` reasoning level the provider advertises ([#13160](https://github.com/can1357/oh-my-pi/pull/13160) by [@H4vC](https://github.com/H4vC)).
+
+## [18.3.0] - 2026-09-24
+
 ### Added
 
 - Added Doubleword as a built-in provider (`DOUBLEWORD_API_KEY`, `/login`). Requests use the Responses API and default to async `flex`; `/fast` switches a turn to realtime ([#12020](https://github.com/can1357/oh-my-pi/pull/12020) by [@audreyt](https://github.com/audreyt)).
@@ -16,6 +23,10 @@
 - Added the `max` thinking-effort tier to the standard Muse Spark 1.3 SKU on reseller hosts and Command Code, with the ladder owned by the class lineage.
 - Added per-account discovery support for Codex cyber access entitlements
 - Added `org-scoped-identity` and `oauth-token-env` rule support for auth providers
+- Added compaction support for the `claude-mythos-preview` model.
+- Added provider and authentication rule definitions for on-device Apple Foundation Models.
+- Added per-account discovery of Codex cyber access entitlements.
+- Added `org-scoped-identity` and `oauth-token-env` authentication rules for providers.
 
 ## [18.2.11] - 2026-09-23
 
@@ -39,6 +50,7 @@
 
 - Existing model caches no longer hide Muse Spark 1.3's new `max` thinking effort after upgrading.
 - Vercel's Muse Spark Anthropic route retains its supported thinking ladder instead of offering a duplicate `max` budget.
+- Fixed Devin Fusion pairing requests failing with `no API providers are available` by routing them through the lead model with the lead's limits and pricing; pairings without an available lead are no longer listed ([#13000](https://github.com/can1357/oh-my-pi/pull/13000) by [@DarkPhilosophy](https://github.com/DarkPhilosophy)).
 
 ## [18.2.9] - 2026-09-22
 

@@ -3,6 +3,7 @@ import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { mnemonBackend } from "../mnemon/backend";
 import linkDescription from "../prompts/tools/link.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { cfgMemoryBackend } from "../memory-backend/settings";
 
 const memoryLinkSchema = type({
 	id1: type("string").describe("source insight UUID; for supersedes this is the new memory"),
@@ -26,7 +27,7 @@ export class MemoryLinkTool implements AgentTool<typeof memoryLinkSchema> {
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryLinkTool | null {
-		if (session.settings.get("memory.backend") !== "mnemon") return null;
+		if (cfgMemoryBackend.get(session.settings) !== "mnemon") return null;
 		return new MemoryLinkTool(session);
 	}
 

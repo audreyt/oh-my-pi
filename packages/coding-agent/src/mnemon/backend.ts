@@ -24,6 +24,13 @@ import mnemonInstructionsTemplate from "../prompts/memories/mnemon-instructions.
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 import { createMnemonCli, findMnemonCommand, type MnemonCli } from "./cli";
 import {
+	cfgMnemonAutoRecall,
+	cfgMnemonAutoRetain,
+	cfgMnemonCliPath,
+	cfgMnemonRecallLimit,
+	cfgMnemonRetainEveryNTurns,
+} from "./settings";
+import {
 	applyMnemonRecallQuality,
 	focusMnemonQuery,
 	formatMnemonSilentRecall,
@@ -129,11 +136,11 @@ export function resetMnemonConversationTracking(session: AgentSession | undefine
 
 export function loadMnemonConfig(settings: Settings): MnemonBackendConfig {
 	return {
-		cliPath: settings.get("mnemon.cliPath"),
-		autoRecall: settings.get("mnemon.autoRecall") !== false,
-		recallLimit: Math.max(1, Math.min(50, settings.get("mnemon.recallLimit") ?? 3)),
-		autoRetain: settings.get("mnemon.autoRetain") !== false,
-		retainEveryNTurns: Math.max(1, Math.floor(settings.get("mnemon.retainEveryNTurns") ?? 4)),
+		cliPath: cfgMnemonCliPath.get(settings),
+		autoRecall: cfgMnemonAutoRecall.get(settings) !== false,
+		recallLimit: Math.max(1, Math.min(50, cfgMnemonRecallLimit.get(settings) ?? 3)),
+		autoRetain: cfgMnemonAutoRetain.get(settings) !== false,
+		retainEveryNTurns: Math.max(1, Math.floor(cfgMnemonRetainEveryNTurns.get(settings) ?? 4)),
 	};
 }
 
@@ -189,7 +196,9 @@ function cliFor(session: AgentSession | undefined, settings?: Settings) {
 	const state = getMnemonSessionState(session);
 	const primary = state?.aliasOf ?? state;
 	if (primary) return primary.cli;
-	const configured = settings?.get("mnemon.cliPath") ?? session?.settings?.get("mnemon.cliPath");
+	const configured =
+		(settings ? cfgMnemonCliPath.get(settings) : undefined) ??
+		(session?.settings ? cfgMnemonCliPath.get(session.settings) : undefined);
 	return createMnemonCli(findMnemonCommand(configured));
 }
 

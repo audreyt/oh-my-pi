@@ -12,8 +12,9 @@
 - Cancelled lock waits now clear the retry timer so short-lived processes can exit promptly.
 - `withFileLock` now honors `AbortSignal` so contended lock waits can be cancelled.
 ### Changed
+### Fixed
 
-- Migrated internal cryptographic utilities to `Bun` performance-optimized hashers
+- Fixed rotating log files being assigned to the wrong date near local-day boundaries by ensuring dated log paths match the local day used to name the files.
 
 ## [18.2.7] - 2026-09-21
 

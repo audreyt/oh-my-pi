@@ -3,6 +3,7 @@ import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { mnemonBackend } from "../mnemon/backend";
 import relatedDescription from "../prompts/tools/related.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { cfgMemoryBackend } from "../memory-backend/settings";
 
 const memoryRelatedSchema = type({
 	id: type("string").describe("insight UUID to walk from"),
@@ -25,7 +26,7 @@ export class MemoryRelatedTool implements AgentTool<typeof memoryRelatedSchema> 
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryRelatedTool | null {
-		if (session.settings.get("memory.backend") !== "mnemon") return null;
+		if (cfgMemoryBackend.get(session.settings) !== "mnemon") return null;
 		return new MemoryRelatedTool(session);
 	}
 

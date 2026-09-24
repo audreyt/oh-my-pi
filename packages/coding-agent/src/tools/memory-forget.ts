@@ -3,6 +3,7 @@ import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { mnemonBackend } from "../mnemon/backend";
 import forgetDescription from "../prompts/tools/forget.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { cfgMemoryBackend } from "../memory-backend/settings";
 
 const memoryForgetSchema = type({
 	id: type("string").describe("insight UUID to soft-delete"),
@@ -23,7 +24,7 @@ export class MemoryForgetTool implements AgentTool<typeof memoryForgetSchema> {
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryForgetTool | null {
-		if (session.settings.get("memory.backend") !== "mnemon") return null;
+		if (cfgMemoryBackend.get(session.settings) !== "mnemon") return null;
 		return new MemoryForgetTool(session);
 	}
 

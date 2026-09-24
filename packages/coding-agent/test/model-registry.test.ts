@@ -22,6 +22,8 @@ import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-ag
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
 
+import { cfgExtendedContext } from "@oh-my-pi/pi-coding-agent/session/context-settings";
+
 describe("ModelRegistry", () => {
 	let tempDir: string;
 	let modelsJsonPath: string;
@@ -560,6 +562,11 @@ describe("ModelRegistry", () => {
 				sessionId: string | undefined;
 				options: { baseUrl?: string; modelId?: string; forceRefresh?: boolean; signal?: AbortSignal } | undefined;
 			}> = [];
+			const originalGetWithCredential = authStorage.keys.getWithCredential.bind(authStorage.keys);
+			authStorage.keys.getWithCredential = async (provider, sessionId, options) => {
+				calls.push({ provider, sessionId, options });
+				return originalGetWithCredential(provider, sessionId, options);
+			};
 			const originalGetApiKey = authStorage.keys.get.bind(authStorage.keys);
 			authStorage.keys.get = async (
 				provider: string,
@@ -581,6 +588,7 @@ describe("ModelRegistry", () => {
 				},
 			});
 
+			authStorage.keys.get = originalGetApiKey;
 			const resolved = await registry.resolver(
 				model,
 				sessionId,
@@ -589,7 +597,7 @@ describe("ModelRegistry", () => {
 				error: undefined,
 				signal: undefined,
 			});
-			expect(resolved).toBe("zhipu-domestic-key");
+			expect(resolved).toMatchObject({ apiKey: "zhipu-domestic-key", credentialId: expect.any(Number) });
 			expect(calls.at(-1)).toEqual({
 				provider: "zhipu-coding-plan",
 				sessionId,
@@ -2336,16 +2344,16 @@ describe("ModelRegistry", () => {
 				"openai-codex": { modelOverrides: { "gpt-6-astra": { thinking } } },
 			});
 			const testSettings = Settings.isolated();
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 			expect(registry.find("openai-codex", "gpt-6-astra")?.thinking).toEqual(thinking);
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(922_000);
 
-			testSettings.set("extendedContext", false);
+			cfgExtendedContext.set(testSettings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
 
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(922_000);
 			expect(registry.find("openai-codex", "gpt-6-astra")?.thinking).toEqual(thinking);
@@ -2364,11 +2372,11 @@ describe("ModelRegistry", () => {
 			const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 			expect(registry.find("proxy-window", "gpt-6-astra")?.contextWindow).toBe(272_000);
 
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("proxy-window", "gpt-6-astra")?.contextWindow).toBe(922_000);
 
-			testSettings.set("extendedContext", false);
+			cfgExtendedContext.set(testSettings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("proxy-window", "gpt-6-astra")?.contextWindow).toBe(272_000);
 
@@ -2381,7 +2389,7 @@ describe("ModelRegistry", () => {
 					modelOverrides: { "gpt-6-astra": { maxContextWindow: 512_000 } },
 				},
 			});
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("proxy-window", "gpt-6-astra")?.contextWindow).toBe(512_000);
 		});
@@ -2398,11 +2406,11 @@ describe("ModelRegistry", () => {
 			const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 			expect(registry.find("openrouter", "anthropic/claude-sonnet-4")?.contextWindow).toBe(128_000);
 
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openrouter", "anthropic/claude-sonnet-4")?.contextWindow).toBe(512_000);
 
-			testSettings.set("extendedContext", false);
+			cfgExtendedContext.set(testSettings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openrouter", "anthropic/claude-sonnet-4")?.contextWindow).toBe(128_000);
 		});
@@ -2412,12 +2420,12 @@ describe("ModelRegistry", () => {
 			const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
 
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(922_000);
 			expect(registry.find("openai-codex", "gpt-5.5")?.contextWindow).toBe(272_000);
 
-			testSettings.set("extendedContext", false);
+			cfgExtendedContext.set(testSettings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
 		});
@@ -2438,11 +2446,11 @@ describe("ModelRegistry", () => {
 			const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(400_000);
 
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(400_000);
 
-			testSettings.set("extendedContext", false);
+			cfgExtendedContext.set(testSettings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(400_000);
 		});
@@ -2482,7 +2490,7 @@ describe("ModelRegistry", () => {
 								},
 				});
 				const testSettings = Settings.isolated();
-				testSettings.set("extendedContext", true);
+				cfgExtendedContext.set(testSettings, true);
 				const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 				expect(registry.getError()).toBeUndefined();
 				const expectWindow = (contextWindow: number) => {
@@ -2493,7 +2501,7 @@ describe("ModelRegistry", () => {
 				expectWindow(922_000);
 
 				for (const extendedContext of [false, true, false, true]) {
-					testSettings.set("extendedContext", extendedContext);
+					cfgExtendedContext.set(testSettings, extendedContext);
 					await registry.reapplyModelPolicies();
 					const expectedWindow = extendedContext ? 922_000 : standardWindow;
 					expectWindow(expectedWindow);
@@ -2543,15 +2551,15 @@ describe("ModelRegistry", () => {
 
 		test("reapplyModelPolicies re-clamps and restores premium windows on toggle", async () => {
 			await Settings.init({ inMemory: true });
-			settings.set("extendedContext", true);
+			cfgExtendedContext.set(settings, true);
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
 			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(1_050_000);
 
-			settings.set("extendedContext", false);
+			cfgExtendedContext.set(settings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(272_000);
 
-			settings.set("extendedContext", true);
+			cfgExtendedContext.set(settings, true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(1_050_000);
 			expect(registry.find("openai-codex", "gpt-5.6-terra")?.contextWindow).toBe(1_000_000);
@@ -3423,7 +3431,7 @@ describe("ModelRegistry", () => {
 				},
 			});
 			const testSettings = Settings.isolated();
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			const registry = new ModelRegistry(authStorage, modelsJsonPath, { settings: testSettings });
 			expect(registry.getError()).toBeUndefined();
 			expect(registry.find("google-antigravity", "gemini-3-pro")?.contextWindow).toBe(512_000);
@@ -3432,11 +3440,11 @@ describe("ModelRegistry", () => {
 				contextWindow: 512_000,
 			});
 
-			testSettings.set("extendedContext", false);
+			cfgExtendedContext.set(testSettings, false);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("google-antigravity", "gemini-3-pro")?.contextWindow).toBe(128_000);
 
-			testSettings.set("extendedContext", true);
+			cfgExtendedContext.set(testSettings, true);
 			await registry.reapplyModelPolicies();
 			await registry.refresh("offline");
 			expect(registry.getError()).toBeUndefined();

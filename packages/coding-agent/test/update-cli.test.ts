@@ -698,6 +698,7 @@ describe("migrateRenamedInstall transaction", () => {
 		tag: "v999.1.0",
 		version: "999.1.0",
 		packages: { pkg: "@new/omp", natives: "@new/natives" },
+		registry: "https://registry.npmjs.org/",
 	};
 
 	function scriptedSteps(script: { install: number[]; removeOld?: number; verify: boolean[] }): {
@@ -1791,6 +1792,7 @@ describe("update-cli manager update recovery", () => {
 		tag: "v18.0.1",
 		version: "18.0.1",
 		packages: { pkg: "@oh-my-pi/pi-coding-agent", natives: "@oh-my-pi/pi-natives" },
+		registry: "https://registry.npmjs.org/",
 	};
 	const launcherPath = "C:/Users/test/AppData/Roaming/npm/omp.cmd";
 
@@ -1909,6 +1911,7 @@ describe("update-cli running-install targeting", () => {
 		tag: "v18.0.1",
 		version: "18.0.1",
 		packages: { pkg: "@oh-my-pi/pi-coding-agent", natives: "@oh-my-pi/pi-natives" },
+		registry: "https://registry.npmjs.org/",
 	};
 
 	it("reports a real executable path from Bun.main", () => {
